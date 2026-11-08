@@ -1,0 +1,97 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Soccer Tactics Quiz</title>
+<style>
+:root{--bg:#f1f3f2;--fg:#17201c;--mut:#5a665f;--card:#fff;--ln:#d2d9d5;--ac:#0f766e;--pf:#4d8f68;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121816;--fg:#e6ece8;--mut:#9aa8a0;--card:#1c2421;--ln:#33403a;--ac:#5fd0c4;--pf:#33674a}}
+:root[data-theme="dark"]{--bg:#121816;--fg:#e6ece8;--mut:#9aa8a0;--card:#1c2421;--ln:#33403a;--ac:#5fd0c4;--pf:#33674a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 Georgia,'Times New Roman',serif}
+.app{max-width:760px;margin:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+h1{font-size:22px;margin:0}#st{color:var(--mut);font:13px system-ui,sans-serif}
+.c{background:var(--card);border:1px solid var(--ln);border-radius:6px;padding:12px 14px}.c b{display:block;margin-bottom:2px}
+.r{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}svg{width:100%;height:auto;display:block;border-radius:6px}
+button{font:14px system-ui,sans-serif;padding:7px 14px;border:1px solid var(--ln);border-radius:6px;background:var(--card);color:var(--fg);cursor:pointer}
+button:hover{border-color:var(--ac)}button:focus-visible{outline:2px solid var(--ac)}button.pr{background:var(--ac);color:var(--bg);border-color:var(--ac)}button:disabled{opacity:.35;cursor:default}
+[data-i]{cursor:pointer}
+</style></head><body><div class="app">
+<div><h1>Soccer Tactics Quiz</h1><div id="st"></div></div>
+<div id="in" class="c"><b>Welcome.</b> Each question shows a moment in an indoor game. Blue is your team and attacks to the right. Red is the opponent. You are the blue player marked YOU. Pick the best spot to move to (A to D). A coach card explains why, and Hint helps if you are stuck. Questions never run out. Choose a format to start:<div class="r"><button id="w6" class="pr">6v6 (5 field players)</button><button id="w7">7v7 (6 field players)</button></div></div>
+<div id="fd" class="c" style="display:none;padding:6px"></div>
+<div class="r" id="bt" style="margin:0;display:none"><button data-o="0">A</button><button data-o="1">B</button><button data-o="2">C</button><button data-o="3">D</button><button id="hb">Hint</button><button id="nx" class="pr">Next question</button><button id="f6">6v6</button><button id="f7">7v7</button></div>
+<div id="co" class="c" style="display:none"><b id="ch"></b><div id="cb"></div></div>
+</div>
+<script>
+const $=i=>document.getElementById(i),M=Math,rnd=(a,b)=>a+M.random()*(b-a),rp=a=>a[M.random()*a.length|0];
+const dst=(a,b)=>M.hypot(a[0]-b[0],a[1]-b[1]),sub=(a,b)=>[a[0]-b[0],a[1]-b[1]],dot=(a,b)=>a[0]*b[0]+a[1]*b[1];
+const unit=v=>{const l=M.hypot(v[0],v[1])||1;return[v[0]/l,v[1]/l]},pl=(a,v,d)=>[a[0]+v[0]*d,a[1]+v[1]*d];
+const rot=(v,t)=>[v[0]*M.cos(t)-v[1]*M.sin(t),v[0]*M.sin(t)+v[1]*M.cos(t)];
+const ang=(u,v)=>M.acos(M.max(-1,M.min(1,dot(unit(u),unit(v)))))*180/M.PI;
+const seg=(p,a,b)=>{const ab=sub(b,a),t=M.max(0,M.min(1,dot(sub(p,a),ab)/(dot(ab,ab)||1)));return dst(p,pl(a,ab,t))};
+const ins=p=>((p[0]-30)/28)**4+((p[1]-13)/11)**4<=1,GOAL=[0,13];
+const band=(v,a,b,c,d)=>v>=a&&v<=b?2:v>=c&&v<=d?1:0,fx=(n,g,b)=>[n,n==2?g:'',b];
+const SC=[
+{n:'Support angle',q:'We have the ball and your teammate is under pressure. Where do you move to offer a pass?',h:'Ask: can the ball reach this spot without the defender touching it, and can one defender cover both me and the ball?',p:'Support the ball with an open passing lane, a comfortable distance, and an angle the pressing defender cannot cover together with the ball.',
+mk(){const C=[rnd(24,40),rnd(7,19)],d=rot([1,0],rnd(-.8,.8)),P=pl(C,d,2.2),s=rp([-1,1]);
+return{us:[C],th:[P],ball:C,me:pl(C,rot(d,-s*rnd(1,1.8)),rnd(9,13)),
+c:[pl(C,rot(d,s*rnd(1.1,1.7)),rnd(8,11)),pl(C,d,rnd(7,9)),pl(C,rot(d,s*1.5),rnd(2,3)),pl(C,rot([-1,0],rnd(-.3,.3)),18)],
+F:[(c,R)=>{const m=M.min(...R.map(o=>seg(o,C,c)));return fx(m>=1.6?2:m>=1?1:0,'the passing lane from the ball is open','a defender can step into the passing lane')},
+c=>{const d=dst(c,C);return fx(band(d,6,13,3.5,17),'the distance is comfortable',d<6?'too close: one defender can cover both you and the ball':'too far: the pass is slow and easy to read')},
+c=>{const a=ang(sub(c,C),sub(P,C));return fx(a>=55?2:a>=30?1:0,'the angle keeps the defender from covering you and the ball','you hide in the defender’s shadow')},
+(c,R)=>{const m=M.min(...R.map(o=>dst(o,c)));return fx(m>=3.2?2:m>=2?1:0,'no defender is on that spot','a defender is already near that spot')}]}}},
+{n:'Pressure goalside',q:'The opponent has the ball and you are the closest defender. Where do you go to pressure him?',h:'Picture the line from the ball to your goal. Where should you stand on it, and how close?',p:'Pressure the ball from goalside: on the line between ball and goal, close enough to take away time, but not so tight that one touch beats you.',
+mk(){const O=[rnd(14,38),rnd(7,19)],g=unit(sub(GOAL,O)),s=rp([-1,1]);
+return{us:[],th:[O],ball:O,me:pl(O,rot(g,rnd(-1.2,1.2)),rnd(7,11)),
+c:[pl(O,rot(g,s*.15),2.5),pl(O,rot(g,s*.2),7),pl(O,rot(g,s*1.4),2.6),pl(O,rot(g,3),3)],
+F:[c=>{const a=ang(sub(c,O),g);return a<=25?[2,'you stand between the ball and your goal']:a<=55?[1,'','you are a little off the line to goal']:[0,'',a>100?'you are behind the ball, so you cannot stop it':'you leave the straight path to goal open']},
+c=>{const d=dst(c,O);return fx(band(d,1.7,3.5,1,5),'you are close enough to pressure without lunging',d>3.5?'too far: the dribbler gets time and space':'too tight: one touch beats you')}]}}},
+{n:'Cover the presser',q:'Your teammate is pressuring the ball carrier. You are the second defender. Where do you stand?',h:'Stand where you help if your teammate is beaten, and where the other attacker cannot get a free pass.',p:'The second defender covers: behind the presser (goalside), close enough to help, and angled to cut the pass to the nearest open attacker.',
+mk(){const O=[rnd(16,38),rnd(7,19)],g=unit(sub(GOAL,O)),F0=pl(O,rot(g,rnd(-.3,.3)),2.5),s=rp([-1,1]),T=pl(O,rot(g,s*rnd(.8,1.4)),rnd(8,11)),mid=[(O[0]+T[0])/2,(O[1]+T[1])/2],gf=unit(sub(GOAL,F0));
+return{us:[F0],th:[O,T],ball:O,me:pl(F0,rot(g,rnd(-1.2,1.2)),rnd(8,12)),
+c:[pl(mid,g,3.5),pl(F0,rot(g,s*1.57),3),pl(O,rot(g,-s),4.5),pl(F0,g,10)],
+F:[c=>{const v=dot(sub(c,F0),gf);return fx(v>=1.5?2:v>=0?1:0,'you are behind your teammate, ready if he is beaten','you are level with or ahead of your teammate, so one beaten defender leaves nothing behind him')},
+c=>{const d=dst(c,F0);return fx(band(d,3,6.5,2,9),'you are close enough to help',d<3?'too close: you both get beaten by the same move':'too far to help in time')},
+c=>{const d=seg(c,O,T);return fx(d<=3.6?2:d<=5.5?1:0,'you also block the pass to the open attacker','the open attacker gets a free pass')}]}}},
+{n:'Recover goalside',q:'We just lost the ball and you were ahead of it. Where do you recover to?',h:'Do not chase the ball from behind. Get between the ball and your goal first.',p:'After losing the ball, recover goalside: between the ball and your goal, in the central lane, at a distance you can actually reach.',
+mk(){const O=[rnd(24,38),rnd(7,19)],g=unit(sub(GOAL,O)),s=rp([-1,1]);
+return{us:[],th:[O],ball:O,me:[O[0]+rnd(3,7),O[1]+rnd(-5,5)],
+c:[pl(O,g,7),pl(O,[1,0],1.8),pl(O,rot(g,s*1.1),7),pl(O,g,15)],
+F:[c=>{const v=dot(sub(c,O),g);return fx(v>=3?2:v>=0?1:0,'you are between the ball and your goal','you are still on the wrong side of the ball')},
+c=>{const a=ang(sub(c,O),g);return fx(a<=25?2:a<=45?1:0,'you cover the central lane to goal','you leave the central lane to goal open')},
+c=>{const d=dst(c,O);return fx(band(d,3,9,2,13),'you can reach that spot in time',d<3?'too close: you are chasing from behind':'too far: you cannot reach the play in time')}]}}}];
+let ST={};try{ST=JSON.parse(localStorage.getItem('sq')||'{}')}catch(e){}
+let FP=ST.FP||5,c0=ST.c||0,t0=ST.t||0,st=ST.st||0,bs=ST.bs||0,Q=null,ans=null,hid=[],hint=0;
+const save=()=>{try{localStorage.setItem('sq',JSON.stringify({FP,c:c0,t:t0,st,bs}))}catch(e){}};
+function fill(k,tk){const r=[];for(let i=0;i<400&&r.length<k;i++){const p=[rnd(5,55),rnd(3,23)];if(ins(p)&&[...tk,...r].every(q=>dst(p,q)>4))r.push(p)}return r}
+let lastS=null;
+function gen(){const s=rp(SC.filter(z=>z!=lastS));for(let t=0;t<400;t++){const x=s.mk(),all=[...x.us,...x.th,x.me];
+if(![...all,...x.c].every(ins)||!x.c.every(c=>all.every(p=>dst(p,c)>1.6)))continue;const tk=[...all,...x.c];
+const us=[...x.us,...fill(FP-1-x.us.length,tk)],th=[...x.th];th.push(...fill(FP-th.length,[...tk,...us]));
+const res=x.c.map(c=>x.F.map(f=>f(c,th))),sc=res.map(r=>r.reduce((a,z)=>a+z[0],0)),o=[0,1,2,3].sort((a,b)=>sc[b]-sc[a]);
+if(sc[o[0]]-sc[o[1]]<2)continue;const sh=[0,1,2,3].sort(()=>M.random()-.5);
+lastS=s;return{s,me:x.me,ball:x.ball,us,th,c:sh.map(i=>x.c[i]),res:sh.map(i=>res[i]),sc:sh.map(i=>sc[i]),best:sh.indexOf(o[0])}}return gen()}
+const P=v=>(v[0]*10).toFixed(1)+','+(v[1]*10).toFixed(1);
+function render(){const q=Q,L='ABCD';let pts=[];for(let i=0;i<72;i++){const t=i/72*6.2832,c=M.cos(t),s=M.sin(t);pts.push(P([30+30*M.sign(c)*M.abs(c)**.5,13+13*M.sign(s)*M.abs(s)**.5]))}
+const dot_=(p,col,r)=>`<circle cx="${p[0]*10}" cy="${p[1]*10}" r="${r}" fill="${col}" stroke="#fff" stroke-width="1.5"/>`;
+let s=`<svg viewBox="-12 -12 624 284"><polygon points="${pts.join(' ')}" fill="var(--pf)" stroke="#fff" stroke-width="3"/><line x1="300" y1="0" x2="300" y2="260" stroke="#fff" opacity=".6"/><circle cx="300" cy="130" r="30" fill="none" stroke="#fff" opacity=".6"/><rect x="-8" y="105" width="8" height="50" fill="#fff"/><rect x="600" y="105" width="8" height="50" fill="#fff"/><rect x="14" y="124" width="12" height="12" fill="#2f6fed"/><rect x="574" y="124" width="12" height="12" fill="#d64545"/><text x="6" y="-2" font-size="11" fill="#fff" opacity=".8">our goal</text><text x="544" y="-2" font-size="11" fill="#fff" opacity=".8">their goal</text>`;
+q.us.forEach(p=>s+=dot_(p,'#2f6fed',7));q.th.forEach(p=>s+=dot_(p,'#d64545',7));
+s+=`<circle cx="${q.me[0]*10}" cy="${q.me[1]*10}" r="9" fill="#2f6fed" stroke="#ffd23f" stroke-width="3.5"/><text x="${q.me[0]*10}" y="${q.me[1]*10+24}" font-size="12" font-weight="bold" fill="#fff" stroke="#000" stroke-width="3" paint-order="stroke" text-anchor="middle">YOU</text>`;
+s+=`<circle cx="${q.ball[0]*10+10}" cy="${q.ball[1]*10-10}" r="4.5" fill="#fff" stroke="#000" stroke-width="1.5"/>`;
+if(ans!==null)s+=`<line x1="${q.me[0]*10}" y1="${q.me[1]*10}" x2="${q.c[q.best][0]*10}" y2="${q.c[q.best][1]*10}" stroke="#22c55e" stroke-width="3" stroke-dasharray="6 5"/>`;
+q.c.forEach((c,i)=>{const col=ans===null?'#fff':i==q.best?'#22c55e':i==ans?'#ef4444':'#fff',dm=hid.includes(i)||(ans!==null&&i!=q.best&&i!=ans);
+s+=`<g data-i="${i}" opacity="${dm?.25:1}"><circle cx="${c[0]*10}" cy="${c[1]*10}" r="12" fill="rgba(255,255,255,.4)" stroke="${col}" stroke-width="${ans===null?2:4}" ${ans===null?'stroke-dasharray="4 3"':''}/><text x="${c[0]*10}" y="${c[1]*10+5}" font-size="14" font-weight="bold" text-anchor="middle" fill="#000">${L[i]}</text></g>`});
+$('fd').innerHTML=s+'</svg>';
+document.querySelectorAll('[data-o]').forEach(b=>b.disabled=ans!==null||hid.includes(+b.dataset.o));
+$('hb').disabled=ans!==null;
+$('st').textContent=(FP==5?'6v6':'7v7')+' ('+FP+' field players each). '+c0+'/'+t0+' correct, streak '+st+', best '+bs+'.'}
+function coach(h,t){$('co').style.display='block';$('ch').textContent=h;$('cb').textContent=t}
+function next(){Q=gen();ans=null;hid=[];hint=0;render();coach('Situation',Q.s.q)}
+function pick(i){if(!Q||ans!==null||hid.includes(i))return;ans=i;t0++;const ok=i==Q.best;if(ok){c0++;st++;bs=M.max(bs,st)}else st=0;save();
+const g=Q.res[Q.best].filter(z=>z[0]==2).map(z=>z[1]).join('; ');let t='Best is '+'ABCD'[Q.best]+': '+g+'.';
+if(!ok)t+=' Your pick '+'ABCD'[i]+': '+Q.res[i].filter(z=>z[0]<2).map(z=>z[2]).join('; ')+'.';
+render();coach((ok?'Correct. ':'Not quite. ')+Q.s.n,t+' Principle: '+Q.s.p)}
+function hnt(){if(!Q||ans!==null)return;hint++;if(hint==1)coach('Hint',Q.s.h);else{const w=[0,1,2,3].filter(i=>i!=Q.best).sort((a,b)=>Q.sc[a]-Q.sc[b]).slice(0,2);hid=w;coach('Hint',Q.s.h+' Two weaker options are now faded out.');render()}}
+function go(n){FP=n;save();$('in').style.display='none';$('fd').style.display='block';$('bt').style.display='flex';next()}
+$('w6').onclick=()=>go(5);$('w7').onclick=()=>go(6);$('f6').onclick=()=>go(5);$('f7').onclick=()=>go(6);$('nx').onclick=next;$('hb').onclick=hnt;
+document.querySelectorAll('[data-o]').forEach(b=>b.onclick=()=>pick(+b.dataset.o));
+$('fd').onclick=e=>{const g=e.target.closest('[data-i]');if(g)pick(+g.dataset.i)};
+document.onkeydown=e=>{const k='abcd'.indexOf(e.key.toLowerCase());if(k>=0)pick(k);else if(e.key=='n'||e.key=='Enter')Q&&next();else if(e.key=='h')hnt()};
+$('st').textContent='Pick a format to begin.';
+</script></body></html>
