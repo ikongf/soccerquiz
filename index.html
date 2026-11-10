@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3v3 Defending Quiz – Pressure, Cover, Balance</title>
+<style>
+  :root{--bg:#0f1a14;--panel:#16251c;--line:#2c4434;--txt:#e8f0e9;--mut:#93a89a;--acc:#f2c14e;--def:#3d8bfd;--att:#e5484d;--ok:#3ecf8e;--bad:#ff6b6b}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  h1{font-size:18px;margin:0;letter-spacing:.5px}
+  h1 span{color:var(--acc)}
+  .score{color:var(--mut);font-variant-numeric:tabular-nums}
+  .bar{height:4px;background:var(--line)}.bar>i{display:block;height:100%;background:var(--acc);width:0;transition:width .4s}
+  main{display:grid;grid-template-columns:minmax(300px,560px) 1fr;gap:20px;padding:20px;max-width:1200px;margin:auto}
+  @media(max-width:860px){main{grid-template-columns:1fr}}
+  canvas#field{width:100%;height:auto;background:var(--panel);border-radius:14px;display:block}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--mut);margin-top:8px}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+  .panel{background:var(--panel);border-radius:14px;padding:18px}
+  .tag{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--acc)}
+  h2{margin:4px 0 6px;font-size:20px}
+  .q{color:var(--mut);margin:0 0 14px}
+  .opts{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .opt{background:#0f1a14;border:2px solid var(--line);border-radius:10px;padding:6px;cursor:pointer;color:var(--txt);text-align:left;font:inherit}
+  .opt:hover:not(:disabled){border-color:var(--acc)}
+  .opt canvas{width:100%;display:block;border-radius:6px}
+  .opt b{display:block;padding:4px 2px 0}
+  .opt.right{border-color:var(--ok)}.opt.wrong{border-color:var(--bad)}
+  .opt:disabled{cursor:default}
+  .msg{margin-top:14px;padding:12px;border-radius:10px;background:#0f1a14;border-left:4px solid var(--acc);display:none}
+  .msg.ok{border-color:var(--ok)}.msg.bad{border-color:var(--bad)}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  button.b{background:var(--acc);color:#1b1b1b;border:0;border-radius:8px;padding:9px 14px;font-weight:600;cursor:pointer;font:inherit;font-weight:600}
+  button.b.s{background:transparent;color:var(--txt);border:1px solid var(--line)}
+  .roles{font-size:13px;color:var(--mut);margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+  .roles b{color:var(--txt)}
+  .mode{display:flex;gap:6px}.mode button{background:transparent;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;cursor:pointer;font:inherit;font-size:13px}
+  .mode button.on{background:var(--acc);color:#1b1b1b;border-color:var(--acc);font-weight:600}
+  .cons{display:block;font-size:12px;color:var(--mut);padding:2px}
+</style>
+</head>
+<body>
+<header>
+  <h1>DEFENDING <span>QUIZ</span> · Pressure · Cover · Balance</h1>
+  <div class="mode"><button data-m="3">3v3 Fundamentals</button><button data-m="4">4v4 Advanced</button></div>
+  <div class="score" id="score">Score 0 / 0</div>
+</header>
+<div class="bar"><i id="prog"></i></div>
+<main>
+  <div>
+    <canvas id="field" width="880" height="840"></canvas>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--def)"></i>Defenders (P pressure · C cover · B balance · M man-marking)</span>
+      <span><i class="dot" style="background:var(--att)"></i>Attackers</span>
+      <span><i class="dot" style="background:#fff"></i>Ball</span>
+      <span><i class="dot" style="background:#f2c14e"></i>Our keeper (auto)</span>
+    </div>
+  </div>
+  <div class="panel" id="panel"></div>
+</main>
+<script>
+/* Field: our defensive half of an oval indoor rink. Units = meters.
+   x: 0 = our goal line/end wall, 20 = halfway line. y: 0..20 across. Attack goes toward x=0. */
+const W=20,H=20,R=6,GOAL=[8.5,11.5];
+
+const S=[
+{title:"Central ball, triangle shape",q:"Attacker 1 has the ball centrally. Attackers 2 and 3 offer width. Pick the best defending shape.",
+ att:{A1:[14,10],A2:[12,4],A3:[11,16]},
+ opts:[
+  {d:[[12.6,10],[10.5,7.3],[8,12.6]],ok:1,tag:"all",why:"D1 closes the ball down, D2 sits goal-side between the ball and A2 (backs up D1 and can step to A2), D3 is deepest on the far side: cover of the cover while watching A3.",
+   anim:[{t:600,D1:[13.3,10],msg:"D1 presses"},{t:500,A1:[14.6,10.4]},{t:700,ball:[16.5,7.5],A2:[16.5,7.5],own:"A2",msg:"No forward option – attack goes backwards ✔"}]},
+  {d:[[12.8,10],[13,8.4],[13,11.6]],ok:0,tag:"cover",why:"Everyone ran to the ball. No cover, no balance – one simple pass to A2 breaks all three defenders.",
+   anim:[{t:700,ball:[12,4],own:"A2"},{t:1100,A2:[5,7],D2:[9,6],D1:[10,8],D3:[10,10]},{t:500,ball:[0,9.4],msg:"Potential GOAL – no cover"}]},
+  {d:[[10,10],[10,5],[10,15]],ok:0,tag:"pressure",why:"A flat line with nobody pressing. A1 has all the time in the world to step in and shoot.",
+   anim:[{t:900,A1:[10.8,10],msg:"No pressure..."},{t:500,ball:[0,10.9],msg:"Potential GOAL – no pressure"}]},
+  {d:[[12.6,10],[12,5],[11,15.2]],ok:0,tag:"balance",why:"D2 and D3 man-mark tight and square. When A1 beats D1 there is nobody behind – no cover, no balance.",
+   anim:[{t:900,A1:[8,9],D1:[10,9.6],msg:"A1 beats D1 – nobody behind"},{t:500,ball:[0,9.2],msg:"Potential GOAL"}]}
+ ]},
+{title:"Ball near the wall",q:"A1 has the ball near the left wall. How should D1 press and how should the others support?",
+ att:{A1:[13,3],A2:[12,10],A3:[9,16]},
+ opts:[
+  {d:[[11.4,4.1],[9.6,7],[6.5,11]],ok:1,tag:"all",why:"D1 presses on the inside shoulder, showing A1 down the wall (away from goal). D2 covers on the inside diagonal, D3 balances centrally and still sees A3.",
+   anim:[{t:700,A1:[11.4,2.3],D1:[10.8,3]},{t:500,ball:[10.8,2.8],own:"D1",msg:"Forced into the wall – ball won ✔"}]},
+  {d:[[11.8,2.3],[9,10],[6,14]],ok:0,tag:"pressure",why:"D1 pressed from the wall side and showed A1 inside, straight toward goal.",
+   anim:[{t:900,A1:[9.5,6.5],D1:[10.5,4]},{t:500,ball:[0,9.1],msg:"Potential GOAL – shown inside"}]},
+  {d:[[11.4,4.1],[11.4,9],[8,15]],ok:0,tag:"cover",why:"D2 is square with D1. In indoor the wall is a teammate – A1 bounces it past D1 and runs onto it with no cover behind.",
+   anim:[{t:400,ball:[11,0.2]},{t:400,ball:[8,2.6],A1:[9.5,2.6]},{t:300,A1:[8,2.6],own:"A1",msg:"Wall pass beats D1"},{t:800,A1:[4,6.5],D2:[7,8]},{t:500,ball:[0,9.6],msg:"Potential GOAL – no cover"}]},
+  {d:[[11.4,4.1],[9.6,7],[9,15.3]],ok:0,tag:"balance",why:"D3 is tight on A3 far away. That leaves a huge central gap behind D2 – the space balance should protect.",
+   anim:[{t:700,A2:[6,10]},{t:500,ball:[5.5,10],own:"A2",msg:"Run in behind – no balance"},{t:500,ball:[0,10.5],msg:"Potential GOAL"}]}
+ ]},
+{title:"Wall-pass threat",q:"D1 presses from the inside shoulder, limiting the direct route inside but leaving the wall available. A2 can receive, shoot, combine off the wall or improvise. Which shape prioritizes A2 while keeping cover behind D1?",
+ att:{A1:[10,3],A2:[13,9],A3:[10,15]},
+ opts:[
+  {d:[[8.8,3.7],[6.6,5.6],[5.5,10.5]],ok:0,tag:"cover",consequence:"tradeoff",why:"This protects the self-wall rebound, but D2 has moved too far from A2. The wall returns one predictable ball only if angle and weight are right; A2 can shoot, pass, combine off the wall or change direction. Prioritize the player, while still watching the rebound. A wall specialist could justify shading farther toward the boards.",
+   anim:[{t:600,ball:[13,9],own:"A2",msg:"A2 receives with space"},{t:700,A2:[11,9.5],D2:[8.5,7],D3:[6,10.5]},{t:500,msg:"A2 has options – defenders recovering"}]},
+  {d:[[8.8,3.7],[9,8],[6,12]],ok:1,preferred:1,tag:"all",consequence:"tradeoff",why:"D2 stays goal-side of A2 and can close the receiver, while retaining depth behind D1. D3 balances inside and watches A3. The human attacker is the main threat. The wall is still available, so D2 must scan and recover if a precisely weighted rebound beats D1; this shape reduces risk, not guarantees a stop.",
+   anim:[{t:600,ball:[13,9],own:"A2",D2:[11.5,8.8],D3:[6.5,11.5],msg:"D2 closes the receiver"},{t:600,A2:[13.7,10],D2:[12.2,9.4],D1:[9,5]},{t:500,msg:"A2 under pressure – wall still available"}]},
+  {d:[[8.8,3.7],[12.3,8.6],[9.5,14.3]],ok:1,tag:"cover",consequence:"tradeoff",why:"Tight marking limits the easiest pass to A2 and keeps A3 occupied. But D2 is farther from D1, and D3 has less depth for balance. If A1 executes the self-wall pass precisely, D1 must recover and the others drop quickly. Against ordinary rec players, prioritizing A2 can make sense; the more balanced shape retains better backup.",
+   anim:[{t:400,ball:[8.5,0.2],msg:"If the wall pass is precise…"},{t:400,ball:[6.6,2.6],A1:[7.4,2.6],D1:[7.8,3.5]},{t:500,A1:[6.6,2.6],own:"A1",D1:[7,3.5],D2:[10,7],D3:[7.5,12]},{t:500,msg:"Contested rebound – cover recovering"}]},
+  {d:[[8.8,3.7],[2.5,8],[2.5,12]],ok:0,tag:"balance",why:"Too deep. Cover must be close enough to help. A2 is totally free to receive and shoot.",
+   anim:[{t:600,ball:[13,9],own:"A2"},{t:700,A2:[9,9.5]},{t:500,ball:[0,10.8],msg:"Potential GOAL – free shot from range"}]}
+ ]},
+{title:"Overlapping run",q:"A1 has the ball; A2 starts an overlapping run outside A1 toward the corner. Best shape?",
+ att:{A1:[13,8],A2:[15,5],A3:[10,15]},runs:[[[15,5],[9,3]]],
+ opts:[
+  {d:[[11.8,8.6],[11,5.6],[7.5,11]],ok:1,tag:"all",why:"D1 keeps pressure. D2 tracks the runner goal-side, D3 slides across to cover the middle while staying aware of A3.",
+   anim:[{t:900,A2:[9,3],D2:[8.6,3.9],D3:[7,9.5]},{t:500,ball:[8.7,3.5],own:"D2",msg:"Runner tracked – interception ✔"}]},
+  {d:[[11.8,8.6],[11,10],[7.5,12]],ok:0,tag:"cover",why:"D2 watched the ball and let the overlap go. A2 is free in the corner.",
+   anim:[{t:900,A2:[9,3]},{t:500,ball:[9,3],own:"A2"},{t:800,A2:[4,6]},{t:500,ball:[0,9.4],msg:"Potential GOAL – runner lost"}]},
+  {d:[[8.5,8.5],[11,5.6],[7.5,11]],ok:0,tag:"pressure",why:"D1 dropped off. Without pressure, A1 doesn't even need the overlap – just shoots.",
+   anim:[{t:600,A1:[11.5,8.5]},{t:500,ball:[0,10.3],msg:"Potential GOAL – no pressure"}]},
+  {d:[[11.8,8.6],[11,5.6],[10.5,6.5]],ok:0,tag:"balance",why:"D3 also chased the runner. Two defenders on one attacker leaves A3 and the far side empty.",
+   anim:[{t:600,ball:[10,15],own:"A3",A2:[10,3]},{t:800,A3:[5,12]},{t:500,ball:[0,11],msg:"Potential GOAL – no balance"}]}
+ ]},
+{title:"After a switch of play",q:"The ball was just switched to A3 on the right. How should the defenders re-shape?",
+ att:{A1:[14,4],A2:[13,10],A3:[12,16]},ballAt:"A3",
+ opts:[
+  {d:[[10.8,15.4],[9.6,12],[7,8.5]],ok:1,tag:"all",why:"Roles rotate: the nearest defender becomes D1 and presses, the next covers inside, and the old D1 becomes the deep balance on the far side.",
+   anim:[{t:600,D1:[11.4,15.6]},{t:700,ball:[16,12],A2:[16,12],own:"A2",msg:"Forced backwards ✔"}]},
+  {d:[[12,5],[10,8],[7,11]],ok:0,tag:"pressure",why:"Nobody shifted. A3 drives inside unopposed.",
+   anim:[{t:900,A3:[6,14]},{t:500,ball:[0,11],msg:"Potential GOAL – nobody shifted"}]},
+  {d:[[11,15.5],[10.5,14],[10,16.6]],ok:0,tag:"balance",why:"All three crowded the ball side. The middle opens for A2.",
+   anim:[{t:500,ball:[13,10],own:"A2"},{t:800,A2:[6,10]},{t:500,ball:[0,9.8],msg:"Potential GOAL – no balance"}]},
+  {d:[[10.8,15.4],[9,10],[9,6]],ok:0,tag:"cover",why:"D2 and D3 are flat. A2 runs between D1 and D2 into the gap.",
+   anim:[{t:800,A2:[6,13]},{t:500,ball:[6,13],own:"A2",msg:"Through the gap"},{t:500,ball:[0,10.7],msg:"Potential GOAL – no cover"}]}
+ ]},
+{title:"Run in behind",q:"A3 is about to make a run in behind the defense. Where should D3 be?",
+ att:{A1:[13,6],A2:[14,13],A3:[11,10]},runs:[[[11,10],[4,11]]],
+ opts:[
+  {d:[[11.8,6.6],[10,9.2],[6.2,11.5]],ok:1,tag:"all",why:"D3 is the deepest defender – the cover of the cover – so the run in behind runs straight into them.",
+   anim:[{t:900,A3:[5,11]},{t:500,ball:[5.8,11],D3:[5.8,11.2],own:"D3",msg:"Balance kills the run ✔"}]},
+  {d:[[11.8,6.6],[10,9.2],[10,13]],ok:0,tag:"balance",why:"D3 is level with D2. Nobody protects the space behind.",
+   anim:[{t:900,A3:[4,11]},{t:500,ball:[4,11],own:"A3"},{t:400,ball:[0,9.5],msg:"Potential GOAL – no balance"}]},
+  {d:[[11.8,6.6],[10,9.2],[13,12.6]],ok:0,tag:"balance",why:"D3 is tight on A2, high up the pitch. Marking A2 matters less than the space behind.",
+   anim:[{t:900,A3:[4,11]},{t:500,ball:[4,11],own:"A3"},{t:400,ball:[0,9.5],msg:"Potential GOAL"}]},
+  {d:[[9,6],[10,9.2],[6.2,11.5]],ok:0,tag:"pressure",why:"D1 stands off. A1 shoots before the run even matters.",
+   anim:[{t:500,A1:[12,6.5]},{t:500,ball:[0,8.9],msg:"Potential GOAL – no pressure"}]}
+ ]},
+{title:"Ball deep in the corner",q:"A1 dribbles deep in the corner near our goal. Best shape?",
+ att:{A1:[3,2.5],A2:[8,6],A3:[9,14]},
+ opts:[
+  {d:[[3.4,4.2],[5,8.3],[6.5,11.5]],ok:1,tag:"all",why:"D1 is goal-side and blocks the route to goal. D2 guards the cut-back zone, D3 protects the far post and sees A3.",
+   anim:[{t:500,A2:[6.5,8.5]},{t:500,ball:[5.4,8.3],own:"D2",msg:"Cut-back intercepted ✔"}]},
+  {d:[[4.6,2],[5,8.3],[6.5,11.5]],ok:0,tag:"pressure",why:"D1 is on the wrong side (not goal-side). A1 cuts straight in to goal.",
+   anim:[{t:800,A1:[2,7]},{t:400,ball:[0,9.4],msg:"Potential GOAL – not goal-side"}]},
+  {d:[[3.4,4.2],[4.6,4.8],[5.3,5.6]],ok:0,tag:"cover",why:"D2 and D3 ball-watch next to D1. The cut-back to A2 is wide open.",
+   anim:[{t:500,A2:[7,9]},{t:500,ball:[7,9],own:"A2"},{t:400,ball:[0,10.6],msg:"Potential GOAL – free cut-back"}]},
+  {d:[[3.4,4.2],[5,5],[9,13.4]],ok:0,tag:"balance",why:"D3 man-marks A3 far away. The central space in front of goal is empty.",
+   anim:[{t:500,A2:[7,9]},{t:500,ball:[7,9],own:"A2"},{t:400,ball:[0,10.2],msg:"Potential GOAL"}]}
+ ]},
+{mode:4,title:"4v4: Central overload",q:"A1 has the ball centrally, A2 and A3 offer angles, A4 waits far side. Pick the shape (P pressure · C cover · B balance).",
+ att:{A1:[14,10],A2:[12,5],A3:[11,14],A4:[8,17.5]},
+ opts:[
+  {d:[[12.6,10],[10.6,7.5],[9.8,12.3],[6.5,13.5]],roles:["P","C","C","B"],ok:1,tag:"all",why:"One presses, two cover on both diagonals (each backs up the presser and is goal-side of their attacker), and the deepest defender balances the far side, watching A4 and the back post.",
+   anim:[{t:600,D1:[13.3,10],msg:"Both passing lanes covered"},{t:700,ball:[17,8],A2:[17,8],own:"A2",msg:"Forced backwards ✔"}]},
+  {d:[[12.6,10],[11,5.5],[11,10.5],[11,15]],roles:["P","C","C","C"],ok:0,tag:"balance",why:"A flat line of three behind the presser. Nobody is deep – one ball in behind and A3 is through.",
+   anim:[{t:600,A3:[7,12]},{t:500,ball:[7,12],own:"A3",msg:"In behind the flat line"},{t:500,ball:[0,10.6],msg:"Potential GOAL – no balance"}]},
+  {d:[[12.8,10],[13,8.4],[13,11.6],[11.6,10]],roles:["P","P","P","C"],ok:0,tag:"cover",why:"Four on the ball. A simple pass to A2 and the whole team is bypassed.",
+   anim:[{t:600,ball:[12,5],own:"A2"},{t:900,A2:[5,7.5]},{t:500,ball:[0,9.4],msg:"Potential GOAL – no cover"}]},
+  {d:[[9,10],[9,6],[9,13],[6,15]],roles:["C","C","C","B"],ok:0,tag:"pressure",why:"Good depth, but nobody presses the ball. A1 steps in and shoots.",
+   anim:[{t:800,A1:[11,10],msg:"No pressure..."},{t:500,ball:[0,10.9],msg:"Potential GOAL – no pressure"}]}
+ ]},
+{mode:4,title:"4v4: Wall give-and-go + trailing runner",q:"A1 near the left wall can play off the wall; A3 makes a trailing run inside. Best shape?",
+ att:{A1:[10,3],A2:[13,8],A3:[14,13],A4:[9,16.5]},runs:[[[14,13],[6.5,8]]],
+ opts:[
+  {d:[[8.8,3.7],[6.6,5.6],[9.6,9.5],[5.5,12]],roles:["P","C","C","B"],ok:1,tag:"all",why:"Cover sits on the diagonal where the wall rebound lands, a second cover tracks the trailing runner, and balance stays deep in the middle.",
+   anim:[{t:400,ball:[8.5,0.2]},{t:400,ball:[6.8,3],D2:[6.8,3.2]},{t:200,own:"D2",A3:[8,9],D3:[7.6,8.6],msg:"Rebound read, runner tracked ✔"}]},
+  {d:[[8.8,3.7],[9,7.5],[11.5,11],[6,13]],roles:["P","C","C","B"],ok:0,tag:"cover",why:"Cover is square with the presser – the wall pass goes straight behind them.",
+   anim:[{t:400,ball:[8.5,0.2]},{t:400,ball:[6.6,2.6],A1:[7.4,2.6]},{t:300,A1:[6.6,2.6],own:"A1",msg:"Wall pass beats P"},{t:800,A1:[3,6]},{t:500,ball:[0,9.4],msg:"Potential GOAL – beaten by the wall"}]},
+  {d:[[8.8,3.7],[6.6,5.6],[13,12],[9,15.6]],roles:["P","C","M","M"],ok:0,tag:"balance",why:"Two defenders man-mark high. The trailing runner arrives unmarked in the middle.",
+   anim:[{t:900,A3:[6.5,8]},{t:500,ball:[6.5,8],own:"A3",msg:"Trailing runner free"},{t:400,ball:[0,9.8],msg:"Potential GOAL – no balance"}]},
+  {d:[[8.8,3.7],[6.6,5.6],[7,8],[7.5,10]],roles:["P","C","C","C"],ok:0,tag:"balance",why:"Everyone drifts ball side. Not wrong locally, but A4 is completely free at the back post.",
+   anim:[{t:500,ball:[13,8],own:"A2"},{t:700,A4:[4,14]},{t:500,ball:[4,14],own:"A4"},{t:400,ball:[0,11],msg:"Potential GOAL – back post open"}]}
+ ]},
+{mode:4,title:"4v4: Switch + back-door cut",q:"The ball was switched to A4 on the right while A3 cuts back-door toward the far post. How do the roles rotate?",
+ att:{A1:[14,4],A2:[13,9],A3:[9,12],A4:[12,16.5]},ballAt:"A4",runs:[[[9,12],[3,13]]],
+ opts:[
+  {d:[[10.8,15.6],[9.4,12.8],[8,9],[4.8,10.5]],roles:["P","C","C","B"],ok:1,tag:"all",why:"The nearest defender presses, the next covers inside and picks up the cut, and the old presser drops in as deep balance. Roles move with the ball, not shirt numbers.",
+   anim:[{t:700,A3:[4,12.5],D2:[5,12.6],D4:[4.4,11.4]},{t:500,ball:[4.5,12.4],own:"D2",msg:"Back-door cut shut ✔"}]},
+  {d:[[12,5],[10,8.5],[8,11],[6,13]],roles:["P","C","C","B"],ok:0,tag:"pressure",why:"Nobody rotated. A4 has time and the back-door run is simple.",
+   anim:[{t:700,A3:[3,13]},{t:500,ball:[3,13],own:"A3"},{t:400,ball:[0,10.8],msg:"Potential GOAL – nobody shifted"}]},
+  {d:[[10.8,15.6],[10,13.5],[9.5,11],[9,8]],roles:["P","C","C","C"],ok:0,tag:"balance",why:"Rotation happened, but everyone is at the same depth – nobody protects the far post.",
+   anim:[{t:700,A3:[3,13]},{t:500,ball:[3,13],own:"A3",msg:"Back door open"},{t:400,ball:[0,10.8],msg:"Potential GOAL – no balance"}]},
+  {d:[[10.8,15.6],[11,14],[10,16.8],[6,9]],roles:["P","P","P","B"],ok:0,tag:"cover",why:"Three swarm the ball. A2 is free in the middle.",
+   anim:[{t:500,ball:[13,9],own:"A2"},{t:800,A2:[6,9.5]},{t:500,ball:[0,9.8],msg:"Potential GOAL – no cover"}]}
+ ]},
+{mode:4,title:"4v4: Diagonal through-ball",q:"A1 on the left looks for a diagonal through-ball to A3 running in behind on the right. Best shape?",
+ att:{A1:[14,6],A2:[12,11],A3:[10,15.5],A4:[13,2]},runs:[[[10,15.5],[4,12]]],
+ opts:[
+  {d:[[12.6,6.6],[10.6,8.8],[9.4,12],[5.8,12.3]],roles:["P","C","C","B"],ok:1,tag:"all",why:"Pressure stops an easy pass, the covers screen A2, and balance is deep enough on the right that the diagonal runs straight into them.",
+   anim:[{t:600,A3:[5,12.5]},{t:500,ball:[5.6,12.4],own:"D4",msg:"Diagonal intercepted ✔"}]},
+  {d:[[12.6,6.6],[10.6,8.8],[9.4,12],[10.6,15.2]],roles:["P","C","C","M"],ok:0,tag:"balance",why:"The weak-side defender pushed up tight on A3. One step and A3 is behind everyone.",
+   anim:[{t:600,A3:[4,12]},{t:500,ball:[4,12],own:"A3",msg:"Through ball"},{t:400,ball:[0,10.4],msg:"Potential GOAL – no balance"}]},
+  {d:[[9,6],[10.6,8.8],[9.4,12],[5.8,12.3]],roles:["C","C","C","B"],ok:0,tag:"pressure",why:"Great depth but no pressure. A1 just shoots from range.",
+   anim:[{t:600,A1:[12,6.5]},{t:500,ball:[0,8.9],msg:"Potential GOAL – no pressure"}]},
+  {d:[[12.6,6.6],[11,4],[9.4,12],[5.8,12.3]],roles:["P","M","C","B"],ok:0,tag:"cover",why:"Cover went to man-mark A4 on the wall. Nobody backs up the presser – A1 drives inside.",
+   anim:[{t:800,A1:[7,8],D1:[9,7.4],msg:"A1 beats P – no cover"},{t:500,ball:[0,9.4],msg:"Potential GOAL"}]}
+ ]}
+];
+
+const cv=document.getElementById("field"),cx=cv.getContext("2d");
+const VB={x0:-1.6,y0:-0.6,w:22.2,h:21.2};
+function px(c,p){const s=c.width/VB.w;return[(p[0]-VB.x0)*s,(p[1]-VB.y0)*s]}
+function drawField(c){
+  const g=c.getContext("2d"),s=c.width/VB.w;g.clearRect(0,0,c.width,c.height);
+  g.save();g.translate(-VB.x0*s,-VB.y0*s);g.scale(s,s);
+  // rink with rounded end corners (our end), straight cut at halfway
+  g.beginPath();g.moveTo(W,0);g.lineTo(R,0);g.arcTo(0,0,0,R,R);g.lineTo(0,H-R);g.arcTo(0,H,R,H,R);g.lineTo(W,H);g.closePath();
+  g.fillStyle="#1f5a35";g.fill();g.lineWidth=.35;g.strokeStyle="#d9e2dc";g.stroke();
+  g.strokeStyle="rgba(255,255,255,.55)";g.lineWidth=.08;
+  g.setLineDash([.5,.4]);g.beginPath();g.moveTo(W,0);g.lineTo(W,H);g.stroke();g.setLineDash([]);
+  g.beginPath();g.arc(W,H/2,3,Math.PI/2,Math.PI*1.5);g.stroke();
+  g.beginPath();g.arc(0,H/2,5.5,-Math.PI/2,Math.PI/2);g.stroke();
+  g.fillStyle="rgba(255,255,255,.8)";g.fillRect(-1.1,GOAL[0],1.1,GOAL[1]-GOAL[0]);
+  g.fillStyle="#1f5a35";g.fillRect(-.9,GOAL[0]+.2,.9,GOAL[1]-GOAL[0]-.4);
+  g.restore();
+}
+function player(c,p,col,label,r){
+  const g=c.getContext("2d"),s=c.width/VB.w,[x,y]=px(c,p);r=(r||.55)*s;
+  g.beginPath();g.arc(x,y,r,0,7);g.fillStyle=col;g.fill();g.lineWidth=Math.max(1,s*.08);g.strokeStyle="#0b130e";g.stroke();
+  if(label){g.fillStyle="#fff";g.font=`bold ${r*1.1}px system-ui`;g.textAlign="center";g.textBaseline="middle";g.fillText(label,x,y+1)}
+}
+function arrow(c,a,b){const g=c.getContext("2d"),[x1,y1]=px(c,a),[x2,y2]=px(c,b);
+  g.strokeStyle="rgba(229,72,77,.9)";g.lineWidth=Math.max(1.5,c.width/300);g.setLineDash([6,5]);g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.stroke();g.setLineDash([]);
+  const an=Math.atan2(y2-y1,x2-x1),h=c.width/60;g.beginPath();g.moveTo(x2,y2);g.lineTo(x2-h*Math.cos(an-.4),y2-h*Math.sin(an-.4));g.lineTo(x2-h*Math.cos(an+.4),y2-h*Math.sin(an+.4));g.fillStyle="rgba(229,72,77,.9)";g.fill()}
+function traceOf(sc,o){const st=initState(sc,o);let own=st.owner;const pts=[[...st.ball]];
+  o.anim.forEach(s=>{for(const k in s)if(Array.isArray(s[k])&&k!=="ball")st[k]=s[k];
+    if(s.ball){pts.push(s.ball);own=null}else if(own&&s[own])pts.push([s[own][0]-.6,s[own][1]]);if(s.own)own=s.own});return pts}
+function drawTrace(c,pts,ok){const g=c.getContext("2d"),col=getComputedStyle(document.documentElement).getPropertyValue(ok==="tradeoff"?"--acc":ok?"--ok":"--bad").trim();
+  const e=px(c,pts[pts.length-1]),s=c.width/22.2;
+  g.fillStyle=col;g.globalAlpha=.22;g.beginPath();g.arc(e[0],e[1],2.2*s,0,7);g.fill();g.globalAlpha=1;
+  for(let i=1;i<pts.length;i++){const a=px(c,pts[i-1]),b=px(c,pts[i]);g.strokeStyle=col;g.lineWidth=Math.max(2,s*.15);g.setLineDash([s*.4,s*.25]);
+    g.beginPath();g.moveTo(...a);g.lineTo(...b);g.stroke();g.setLineDash([]);const an=Math.atan2(b[1]-a[1],b[0]-a[0]),h=s*.7;
+    g.fillStyle=col;g.beginPath();g.moveTo(...b);g.lineTo(b[0]-h*Math.cos(an-.45),b[1]-h*Math.sin(an-.45));g.lineTo(b[0]-h*Math.cos(an+.45),b[1]-h*Math.sin(an+.45));g.fill()}}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a}
+let MODE=3,SS=[];
+function gkPos(ball){return[.8,Math.min(GOAL[1]-.4,Math.max(GOAL[0]+.4,10+(ball[1]-10)*.3))]}
+function render(c,st,sc,ghost){
+  drawField(c);const g=c.getContext("2d");
+  if(sc.runs&&!st.anim)sc.runs.forEach(r=>arrow(c,r[0],r[1]));
+  if(ghost)ghost.forEach((p,i)=>{g.globalAlpha=.35;player(c,p,"#3ecf8e",""+(i+1));g.globalAlpha=1});
+  player(c,st.GK,"#f2c14e","GK");
+  Object.keys(sc.att).forEach(k=>player(c,st[k],"#e5484d",k));
+  st.dk.forEach((k,i)=>player(c,st[k],"#3d8bfd",st.roles[i]));
+  if(st.trace)drawTrace(c,st.trace,st.ok);
+  player(c,st.ball,"#ffffff","",.3);
+  if(st.msg&&c.width>300){g.font="bold 30px system-ui";g.textAlign="center";const w=g.measureText(st.msg).width+30,x=c.width/2;
+    g.fillStyle="rgba(0,0,0,.65)";g.fillRect(x-w/2,c.height-70,w,46);g.fillStyle=st.msg.includes("GOAL")?"#ff6b6b":st.msg.includes("✔")?"#3ecf8e":"#fff";g.textBaseline="middle";g.fillText(st.msg,x,c.height-47)}
+}
+function initState(sc,opt){
+  const st={owner:sc.ballAt||"A1"};for(const k in sc.att)st[k]=[...sc.att[k]];
+  st.dk=opt.d.map((_,i)=>"D"+(i+1));st.dk.forEach((k,i)=>st[k]=[...opt.d[i]]);
+  st.roles=opt.roles||["P","C","B"];
+  st.ball=[st[st.owner][0]-.6,st[st.owner][1]];st.GK=gkPos(st.ball);return st;
+}
+
+let idx=0,score=0,answered=0,missed={pressure:0,cover:0,balance:0},anim=null;
+const panel=document.getElementById("panel");
+function play(sc,opt,ghost,done){
+  cancelAnimationFrame(anim);const st=initState(sc,opt);st.anim=1;let i=0,t0=null,from=null;
+  const keys=[...Object.keys(sc.att),...st.dk,"ball"];
+  function step(ts){
+    const s=opt.anim[i];if(!s){render(cv,st,sc,ghost);done&&done();return}
+    if(t0===null){t0=ts;from={};keys.forEach(k=>from[k]=[...st[k]]);if(s.ball)st.owner=null;else if(s.own)st.owner=s.own;if(s.msg)st.msg=s.msg}
+    const p=Math.min(1,(ts-t0)/s.t),e=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+    keys.forEach(k=>{if(s[k])st[k]=[from[k][0]+(s[k][0]-from[k][0])*e,from[k][1]+(s[k][1]-from[k][1])*e]});
+    if(st.owner&&!s.ball)st.ball=[st[st.owner][0]-.6,st[st.owner][1]];
+    const gt=gkPos(st.ball);st.GK=[st.GK[0]+(gt[0]-st.GK[0])*.15,st.GK[1]+(gt[1]-st.GK[1])*.15];
+    render(cv,st,sc,ghost);
+    if(p>=1){if(s.own)st.owner=s.own;i++;t0=null;setTimeout(()=>anim=requestAnimationFrame(step),250);return}
+    anim=requestAnimationFrame(step);
+  }
+  anim=requestAnimationFrame(step);
+}
+function updHead(){document.getElementById("score").textContent=`Score ${score} / ${answered}`;document.getElementById("prog").style.width=(idx/SS.length*100)+"%"}
+function show(){
+  updHead();
+  if(idx>=SS.length)return summary();
+  const sc=SS[idx],L="ABCD";
+  // shuffle-free but present attack only
+  const base=initState(sc,{d:sc.opts[0].d.map(()=>[-9,-9])});render(cv,base,sc);
+  panel.innerHTML=`<div class="tag">${MODE}v${MODE} · Scenario ${idx+1} of ${SS.length}</div><h2>${sc.title}</h2><p class="q">${sc.q}</p><div class="opts"></div><div class="msg" id="msg"></div><div class="btns" id="btns"></div>
+  <div class="roles"><b>P Pressure</b> – close the ball, show away from goal. <b>C Cover</b> – back up P, goal-side of the next attacker. <b>B Balance</b> – deepest, cover the cover, watch the far attacker. Roles follow the ball, not shirt numbers.</div>`;
+  const box=panel.querySelector(".opts");
+  sc.opts.forEach((o,i)=>{
+    const b=document.createElement("button");b.className="opt";const m=document.createElement("canvas");m.width=264;m.height=252;
+    b.appendChild(m);b.insertAdjacentHTML("beforeend",`<b>Option ${L[i]}</b>`);box.appendChild(b);
+    render(m,initState(sc,o),sc);
+    b.onclick=()=>answer(i,box);
+    b.insertAdjacentHTML("beforeend",'<small class="cons"></small>');
+  });
+}
+function answer(i,box){
+  const sc=SS[idx],o=sc.opts[i],best=sc.opts.find(x=>x.preferred)||sc.opts.find(x=>x.ok);
+  [...box.children].forEach((b,j)=>{b.disabled=true;if(sc.opts[j].ok)b.classList.add("right");else if(j===i)b.classList.add("wrong")});
+  [...box.children].forEach((b,j)=>{const op=sc.opts[j],st=initState(sc,op);st.trace=traceOf(sc,op);st.ok=op.consequence||op.ok;render(b.querySelector("canvas"),st,sc);
+    const last=[...op.anim].reverse().find(x=>x.msg);b.querySelector(".cons").textContent=(op.ok?"→ ":"→ ")+(last?last.msg:"")});
+  answered++;if(o.ok)score++;else missed[o.tag]=(missed[o.tag]||0)+1;updHead();
+  const m=document.getElementById("msg");m.style.display="block";m.className="msg "+(o.ok?"ok":"bad");
+  m.innerHTML=`<b>${o.ok?(o.consequence?(o.preferred?"Preferred here.":"Defensible alternative – full credit."):"Correct!"):"Not quite – "+o.tag.toUpperCase()+" problem."}</b> ${o.why}${o===best?"":"<br><br><b>"+(best.preferred?"Preferred here:":"Best:")+"</b> "+best.why}`;
+  const bt=document.getElementById("btns");
+  bt.innerHTML=`<button class="b s" id="rp">↺ Replay</button>${o===best?"":'<button class="b s" id="wb">'+(best.preferred?"Watch preferred shape":"Watch best answer")+'</button>'}<button class="b" id="nx">${idx+1<SS.length?"Next →":"See results"}</button>`;
+  const ghost=o.ok?null:best.d;
+  play(sc,o,ghost);
+  bt.querySelector("#rp").onclick=()=>play(sc,o,ghost);
+  if(o!==best)bt.querySelector("#wb").onclick=()=>play(sc,best);
+  bt.querySelector("#nx").onclick=()=>{cancelAnimationFrame(anim);idx++;show()};
+}
+function summary(){
+  cancelAnimationFrame(anim);drawField(cv);
+  const worst=Object.entries(missed).sort((a,b)=>b[1]-a[1])[0];
+  const tips={pressure:"Get D1 tight to the ball quickly and angle the press so the attacker is shown away from goal, toward the wall.",cover:"D2 should sit goal-side on a diagonal behind D1 – close enough to win a wall pass rebound, while still in reach of A2.",balance:"D3 should be the deepest defender, protecting the space behind the cover rather than man-marking high and wide."};
+  panel.innerHTML=`<div class="tag">Finished</div><h2>You scored ${score} / ${SS.length}</h2>
+  <p class="q">${worst&&worst[1]>0?`Most missed principle: <b>${worst[0].toUpperCase()}</b> (${worst[1]}x). ${tips[worst[0]]}`:"Perfect shape – pressure, cover and balance all on point!"}</p>
+  <div class="btns"><button class="b" id="again">Play again</button></div>`;
+  document.getElementById("again").onclick=()=>start(MODE);
+}
+function start(m){MODE=m;idx=0;score=0;answered=0;missed={pressure:0,cover:0,balance:0};
+  SS=S.filter(x=>(x.mode||3)===m).map(x=>{let o;do{o=shuffle([...x.opts])}while(SS.length&&false);return{...x,opts:o}});
+  // make sure the correct slot varies: avoid same slot as previous scenario
+  for(let i=1;i<SS.length;i++){let t=0;while(SS[i].opts.findIndex(o=>o.ok)===SS[i-1].opts.findIndex(o=>o.ok)&&t++<20)shuffle(SS[i].opts)}
+  document.querySelectorAll(".mode button").forEach(b=>b.classList.toggle("on",+b.dataset.m===m));show()}
+document.querySelectorAll(".mode button").forEach(b=>b.onclick=()=>start(+b.dataset.m));
+start(3);
+</script>
+</body>
+</html>
