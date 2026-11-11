@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Indoor Tactics Quiz – Defend &amp; Attack</title>
+<style>
+  :root{--bg:#0f1a14;--panel:#16251c;--line:#2c4434;--txt:#e8f0e9;--mut:#93a89a;--acc:#f2c14e;--def:#3d8bfd;--att:#e5484d;--ok:#3ecf8e;--bad:#ff6b6b}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  h1{font-size:18px;margin:0;letter-spacing:.5px}
+  h1 span{color:var(--acc)}
+  .score{color:var(--mut);font-variant-numeric:tabular-nums}
+  .bar{height:4px;background:var(--line)}.bar>i{display:block;height:100%;background:var(--acc);width:0;transition:width .4s}
+  main{display:grid;grid-template-columns:minmax(300px,560px) 1fr;gap:20px;padding:20px;max-width:1200px;margin:auto}
+  @media(max-width:860px){main{grid-template-columns:1fr}}
+  canvas#field{width:100%;height:auto;background:var(--panel);border-radius:14px;display:block}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--mut);margin-top:8px}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+  .panel{background:var(--panel);border-radius:14px;padding:18px}
+  .tag{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--acc)}
+  h2{margin:4px 0 6px;font-size:20px}
+  .q{color:var(--mut);margin:0 0 14px}
+  .opts{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .opt{background:#0f1a14;border:2px solid var(--line);border-radius:10px;padding:6px;cursor:pointer;color:var(--txt);text-align:left;font:inherit}
+  .opt:hover:not(:disabled){border-color:var(--acc)}
+  .opt canvas{width:100%;display:block;border-radius:6px}
+  .opt b{display:block;padding:4px 2px 0}
+  .opt.right{border-color:var(--ok)}.opt.watching{outline:2px dashed var(--acc);outline-offset:2px}
+.opt.alt{border-color:var(--acc)}.opt.wrong{border-color:var(--bad)}
+  .opt:disabled{cursor:default}
+  .msg{margin-top:14px;padding:12px;border-radius:10px;background:#0f1a14;border-left:4px solid var(--acc);display:none}
+  .msg.ok{border-color:var(--ok)}.msg.bad{border-color:var(--bad)}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  button.b{background:var(--acc);color:#1b1b1b;border:0;border-radius:8px;padding:9px 14px;font-weight:600;cursor:pointer;font:inherit;font-weight:600}
+  button.b.s{background:transparent;color:var(--txt);border:1px solid var(--line)}
+  .roles{font-size:13px;color:var(--mut);margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+  .roles b{color:var(--txt)}
+  .mode{display:flex;gap:6px}.mode button{background:transparent;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;cursor:pointer;font:inherit;font-size:13px}
+  .mode button.on{background:var(--acc);color:#1b1b1b;border-color:var(--acc);font-weight:600}
+  .cons{display:block;font-size:12px;color:var(--mut);padding:2px}
+  .opt.selected{border-color:var(--acc)}
+  .opt .watch{display:block;font-size:12px;color:var(--acc);padding:2px;font-weight:600}
+  .opt:hover .watch{text-decoration:underline}
+  .hint{display:flex;align-items:center;gap:8px;margin:12px 0 0;font-size:13px;color:var(--acc);background:rgba(242,193,78,.09);border:1px dashed var(--acc);border-radius:8px;padding:8px 10px}
+  .mode button:focus-visible,.opt:focus-visible,button.b:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+  [hidden]{display:none!important}
+  @media(max-width:400px){main{padding:10px;gap:12px;grid-template-columns:minmax(0,1fr)}.panel{padding:12px}.opt b{font-size:13px}}
+  @media(prefers-reduced-motion:reduce){.bar>i{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>DEFENDING <span>QUIZ</span> · Pressure · Cover · Balance</h1>
+  <div class="mode side"><button data-side="defend">Defend</button><button data-side="attack">Attack</button></div>
+  <div class="mode set"><button data-s="cur">Curated</button><button data-s="gen">Endless</button></div>
+  <div class="mode"><button data-m="3">3v3 Fundamentals</button><button data-m="4">4v4 Advanced</button></div>
+  <div class="score" id="score">Score 0 / 0</div>
+</header>
+<div class="bar"><i id="prog"></i></div>
+<main>
+  <div>
+    <canvas id="field" width="880" height="840"></canvas>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--def)"></i>Defenders (P pressure · C cover · B balance · M man-marking)</span>
+      <span><i class="dot" style="background:var(--att)"></i>Attackers</span>
+      <span><i class="dot" style="background:#fff"></i>Ball</span>
+      <span><i class="dot" style="background:#f2c14e"></i>Blue keeper (auto)</span>
+    </div>
+  </div>
+  <div class="panel" id="panel"></div>
+</main>
+<script>
+/* Field: our defensive half of an oval indoor rink. Units = meters.
+   x: 0 = our goal line/end wall, 20 = halfway line. y: 0..20 across. Attack goes toward x=0. */
+const W=20,H=20,R=6,GOAL=[8.5,11.5];
+
+const S=[
+{title:"Central ball, triangle shape",q:"Attacker 1 has the ball centrally. Attackers 2 and 3 offer width. Pick the best defending shape.",
+ att:{A1:[14,10],A2:[12,4],A3:[11,16]},
+ opts:[
+  {d:[[12.6,10],[10.5,7.3],[8,12.6]],ok:1,tag:"all",why:"D1 closes the ball down, D2 sits goal-side between the ball and A2 (backs up D1 and can step to A2), D3 is deepest on the far side: cover of the cover while watching A3.",
+   anim:[{t:600,D1:[13.3,10],msg:"D1 presses"},{t:500,A1:[14.6,10.4]},{t:700,ball:[16.5,7.5],A2:[16.5,7.5],own:"A2",msg:"No forward option – attack goes backwards ✔"}]},
+  {d:[[12.8,10],[13,8.4],[13,11.6]],ok:0,tag:"cover",why:"Everyone ran to the ball. No cover, no balance – one simple pass to A2 breaks all three defenders.",
+   anim:[{t:700,ball:[12,4],own:"A2"},{t:1100,A2:[5,7],D2:[9,6],D1:[10,8],D3:[10,10]},{t:500,ball:[0,9.4],msg:"Potential GOAL – no cover"}]},
+  {d:[[10,10],[10,5],[10,15]],ok:0,tag:"pressure",why:"A flat line with nobody pressing. A1 has all the time in the world to step in and shoot.",
+   anim:[{t:900,A1:[10.8,10],msg:"No pressure..."},{t:500,ball:[0,10.9],msg:"Potential GOAL – no pressure"}]},
+  {d:[[12.6,10],[12,5],[11,15.2]],ok:0,tag:"balance",why:"D2 and D3 man-mark tight and square. When A1 beats D1 there is nobody behind – no cover, no balance.",
+   anim:[{t:900,A1:[8,9],D1:[10,9.6],msg:"A1 beats D1 – nobody behind"},{t:500,ball:[0,9.2],msg:"Potential GOAL"}]}
+ ]},
+{title:"Ball near the wall",q:"A1 has the ball near the left wall. How should D1 press and how should the others support?",
+ att:{A1:[13,3],A2:[12,10],A3:[9,16]},
+ opts:[
+  {d:[[11.4,4.1],[9.6,7],[6.5,11]],ok:1,tag:"all",why:"D1 presses on the inside shoulder, showing A1 down the wall (away from goal). D2 covers on the inside diagonal, D3 balances centrally and still sees A3.",
+   anim:[{t:700,A1:[11.4,2.3],D1:[10.8,3]},{t:500,ball:[10.8,2.8],own:"D1",msg:"Forced into the wall – ball won ✔"}]},
+  {d:[[11.8,2.3],[9,10],[6,14]],ok:0,tag:"pressure",why:"D1 pressed from the wall side and showed A1 inside, straight toward goal.",
+   anim:[{t:900,A1:[9.5,6.5],D1:[10.5,4]},{t:500,ball:[0,9.1],msg:"Potential GOAL – shown inside"}]},
+  {d:[[11.4,4.1],[11.4,9],[8,15]],ok:1,tag:"cover",consequence:"tradeoff",why:"D2 prioritizes the pass to human attacker A2, and D3 stays goal-side of A3. This is defensible, but D2 is level with P and D3 is wide, so backup against an inside dribble or precise wall rebound is weaker. The deeper inside diagonal offers more connected cover; the wall attempt is a contested possibility, not an automatic failure.",
+   anim:[{t:400,ball:[11,0.2],msg:"If the wall pass is precise…"},{t:400,ball:[8,2.6],A1:[9.5,2.6],D1:[9.8,3.3]},{t:500,A1:[8,2.6],own:"A1",D1:[8.8,3.4],D2:[9,7],D3:[6.5,12]},{t:500,msg:"Contested rebound – cover recovering"}]},
+  {d:[[11.4,4.1],[9.6,7],[9,15.3]],ok:0,tag:"balance",why:"D3 is tight on A3 far away. That leaves a huge central gap behind D2 – the space balance should protect.",
+   anim:[{t:700,A2:[6,10]},{t:500,ball:[5.5,10],own:"A2",msg:"Run in behind – no balance"},{t:500,ball:[0,10.5],msg:"Potential GOAL"}]}
+ ]},
+{title:"Wall-pass threat",q:"D1 presses from the inside shoulder, limiting the direct route inside but leaving the wall available. A2 can receive, shoot, combine off the wall or improvise. Which shape prioritizes A2 while keeping cover behind D1?",
+ att:{A1:[10,3],A2:[13,9],A3:[10,15]},
+ opts:[
+  {d:[[8.8,3.7],[6.6,5.6],[5.5,10.5]],ok:0,tag:"cover",consequence:"tradeoff",why:"This protects the self-wall rebound, but D2 has moved too far from A2. The wall returns one predictable ball only if angle and weight are right; A2 can shoot, pass, combine off the wall or change direction. Prioritize the player, while still watching the rebound. A wall specialist could justify shading farther toward the boards.",
+   anim:[{t:600,ball:[13,9],own:"A2",msg:"A2 receives with space"},{t:700,A2:[11,9.5],D2:[8.5,7],D3:[6,10.5]},{t:500,msg:"A2 has options – defenders recovering"}]},
+  {d:[[8.8,3.7],[9,8],[6,12]],ok:1,preferred:1,tag:"all",consequence:"tradeoff",why:"D2 stays goal-side of A2 and can close the receiver, while retaining depth behind D1. D3 balances inside and watches A3. The human attacker is the main threat. The wall is still available, so D2 must scan and recover if a precisely weighted rebound beats D1; this shape reduces risk, not guarantees a stop.",
+   anim:[{t:600,ball:[13,9],own:"A2",D2:[11.5,8.8],D3:[6.5,11.5],msg:"D2 closes the receiver"},{t:600,A2:[13.7,10],D2:[12.2,9.4],D1:[9,5]},{t:500,msg:"A2 under pressure – wall still available"}]},
+  {d:[[8.8,3.7],[12.3,8.6],[9.5,14.3]],ok:1,tag:"cover",consequence:"tradeoff",why:"Tight marking limits the easiest pass to A2 and keeps A3 occupied. But D2 is farther from D1, and D3 has less depth for balance. If A1 executes the self-wall pass precisely, D1 must recover and the others drop quickly. Against ordinary rec players, prioritizing A2 can make sense; the more balanced shape retains better backup.",
+   anim:[{t:400,ball:[8.5,0.2],msg:"If the wall pass is precise…"},{t:400,ball:[6.6,2.6],A1:[7.4,2.6],D1:[7.8,3.5]},{t:500,A1:[6.6,2.6],own:"A1",D1:[7,3.5],D2:[10,7],D3:[7.5,12]},{t:500,msg:"Contested rebound – cover recovering"}]},
+  {d:[[8.8,3.7],[2.5,8],[2.5,12]],ok:0,tag:"balance",why:"Too deep. Cover must be close enough to help. A2 is totally free to receive and shoot.",
+   anim:[{t:600,ball:[13,9],own:"A2"},{t:700,A2:[9,9.5]},{t:500,ball:[0,10.8],msg:"Potential GOAL – free shot from range"}]}
+ ]},
+{title:"Overlapping run",q:"A1 has the ball; A2 starts an overlapping run outside A1 toward the corner. Best shape?",
+ att:{A1:[13,8],A2:[15,5],A3:[10,15]},runs:[[[15,5],[9,3]]],
+ opts:[
+  {d:[[11.8,8.6],[11,5.6],[7.5,11]],ok:1,tag:"all",why:"D1 keeps pressure. D2 tracks the runner goal-side, D3 slides across to cover the middle while staying aware of A3.",
+   anim:[{t:900,A2:[9,3],D2:[8.6,3.9],D3:[7,9.5]},{t:500,ball:[8.7,3.5],own:"D2",msg:"Runner tracked – interception ✔"}]},
+  {d:[[11.8,8.6],[11,10],[7.5,12]],ok:0,tag:"cover",why:"D2 watched the ball and let the overlap go. A2 is free in the corner.",
+   anim:[{t:900,A2:[9,3]},{t:500,ball:[9,3],own:"A2"},{t:800,A2:[4,6]},{t:500,ball:[0,9.4],msg:"Potential GOAL – runner lost"}]},
+  {d:[[8.5,8.5],[11,5.6],[7.5,11]],ok:0,tag:"pressure",why:"D1 dropped off. Without pressure, A1 doesn't even need the overlap – just shoots.",
+   anim:[{t:600,A1:[11.5,8.5]},{t:500,ball:[0,10.3],msg:"Potential GOAL – no pressure"}]},
+  {d:[[11.8,8.6],[11,5.6],[10.5,6.5]],ok:0,tag:"balance",why:"D3 also chased the runner. Two defenders on one attacker leaves A3 and the far side empty.",
+   anim:[{t:600,ball:[10,15],own:"A3",A2:[10,3]},{t:800,A3:[5,12]},{t:500,ball:[0,11],msg:"Potential GOAL – no balance"}]}
+ ]},
+{title:"After a switch of play",q:"The ball was just switched to A3 on the right. How should the defenders re-shape?",
+ att:{A1:[14,4],A2:[13,10],A3:[12,16]},ballAt:"A3",
+ opts:[
+  {d:[[10.8,15.4],[9.6,12],[7,8.5]],ok:1,tag:"all",why:"Roles rotate: the nearest defender becomes D1 and presses, the next covers inside, and the old D1 becomes the deep balance on the far side.",
+   anim:[{t:600,D1:[11.4,15.6]},{t:700,ball:[16,12],A2:[16,12],own:"A2",msg:"Forced backwards ✔"}]},
+  {d:[[12,5],[10,8],[7,11]],ok:0,tag:"pressure",why:"Nobody shifted. A3 drives inside unopposed.",
+   anim:[{t:900,A3:[6,14]},{t:500,ball:[0,11],msg:"Potential GOAL – nobody shifted"}]},
+  {d:[[11,15.5],[10.5,14],[10,16.6]],ok:0,tag:"balance",why:"All three crowded the ball side. The middle opens for A2.",
+   anim:[{t:500,ball:[13,10],own:"A2"},{t:800,A2:[6,10]},{t:500,ball:[0,9.8],msg:"Potential GOAL – no balance"}]},
+  {d:[[10.8,15.4],[9,10],[9,6]],ok:0,tag:"cover",why:"D2 and D3 are flat. A2 runs between D1 and D2 into the gap.",
+   anim:[{t:800,A2:[6,13]},{t:500,ball:[6,13],own:"A2",msg:"Through the gap"},{t:500,ball:[0,10.7],msg:"Potential GOAL – no cover"}]}
+ ]},
+{title:"Run in behind",q:"A3 is about to make a run in behind the defense. Where should D3 be?",
+ att:{A1:[13,6],A2:[14,13],A3:[11,10]},runs:[[[11,10],[4,11]]],
+ opts:[
+  {d:[[11.8,6.6],[10,9.2],[6.2,11.5]],ok:1,tag:"all",why:"D3 is the deepest defender – the cover of the cover – so the run in behind runs straight into them.",
+   anim:[{t:900,A3:[5,11]},{t:500,ball:[5.8,11],D3:[5.8,11.2],own:"D3",msg:"Balance kills the run ✔"}]},
+  {d:[[11.8,6.6],[10,9.2],[10,13]],ok:0,tag:"balance",why:"D3 is level with D2. Nobody protects the space behind.",
+   anim:[{t:900,A3:[4,11]},{t:500,ball:[4,11],own:"A3"},{t:400,ball:[0,9.5],msg:"Potential GOAL – no balance"}]},
+  {d:[[11.8,6.6],[10,9.2],[13,12.6]],ok:0,tag:"balance",why:"D3 is tight on A2, high up the pitch. Marking A2 matters less than the space behind.",
+   anim:[{t:900,A3:[4,11]},{t:500,ball:[4,11],own:"A3"},{t:400,ball:[0,9.5],msg:"Potential GOAL"}]},
+  {d:[[9,6],[10,9.2],[6.2,11.5]],ok:0,tag:"pressure",why:"D1 stands off. A1 shoots before the run even matters.",
+   anim:[{t:500,A1:[12,6.5]},{t:500,ball:[0,8.9],msg:"Potential GOAL – no pressure"}]}
+ ]},
+{title:"Ball deep in the corner",q:"A1 dribbles deep in the corner near our goal. Best shape?",
+ att:{A1:[3,2.5],A2:[8,6],A3:[9,14]},
+ opts:[
+  {d:[[3.4,4.2],[5,8.3],[6.5,11.5]],ok:1,tag:"all",why:"D1 is goal-side and blocks the route to goal. D2 guards the cut-back zone, D3 protects the far post and sees A3.",
+   anim:[{t:500,A2:[6.5,8.5]},{t:500,ball:[5.4,8.3],own:"D2",msg:"Cut-back intercepted ✔"}]},
+  {d:[[4.6,2],[5,8.3],[6.5,11.5]],ok:0,tag:"pressure",why:"D1 is on the wrong side (not goal-side). A1 cuts straight in to goal.",
+   anim:[{t:800,A1:[2,7]},{t:400,ball:[0,9.4],msg:"Potential GOAL – not goal-side"}]},
+  {d:[[3.4,4.2],[4.6,4.8],[5.3,5.6]],ok:0,tag:"cover",why:"D2 and D3 ball-watch next to D1. The cut-back to A2 is wide open.",
+   anim:[{t:500,A2:[7,9]},{t:500,ball:[7,9],own:"A2"},{t:400,ball:[0,10.6],msg:"Potential GOAL – free cut-back"}]},
+  {d:[[3.4,4.2],[5,5],[9,13.4]],ok:0,tag:"balance",why:"D3 man-marks A3 far away. The central space in front of goal is empty.",
+   anim:[{t:500,A2:[7,9]},{t:500,ball:[7,9],own:"A2"},{t:400,ball:[0,10.2],msg:"Potential GOAL"}]}
+ ]},
+{mode:4,title:"4v4: Central overload",q:"A1 has the ball centrally, A2 and A3 offer angles, A4 waits far side. Pick the shape (P pressure · C cover · B balance).",
+ att:{A1:[14,10],A2:[12,5],A3:[11,14],A4:[8,17.5]},
+ opts:[
+  {d:[[12.6,10],[10.6,7.5],[9.8,12.3],[6.5,13.5]],roles:["P","C","C","B"],ok:1,tag:"all",why:"One presses, two cover on both diagonals (each backs up the presser and is goal-side of their attacker), and the deepest defender balances the far side, watching A4 and the back post.",
+   anim:[{t:600,D1:[13.3,10],msg:"Both passing lanes covered"},{t:700,ball:[17,8],A2:[17,8],own:"A2",msg:"Forced backwards ✔"}]},
+  {d:[[12.6,10],[11,5.5],[11,10.5],[11,15]],roles:["P","C","C","C"],ok:0,tag:"balance",why:"A flat line of three behind the presser. Nobody is deep – one ball in behind and A3 is through.",
+   anim:[{t:600,A3:[7,12]},{t:500,ball:[7,12],own:"A3",msg:"In behind the flat line"},{t:500,ball:[0,10.6],msg:"Potential GOAL – no balance"}]},
+  {d:[[12.8,10],[13,8.4],[13,11.6],[11.6,10]],roles:["P","P","P","C"],ok:0,tag:"cover",why:"Four on the ball. A simple pass to A2 and the whole team is bypassed.",
+   anim:[{t:600,ball:[12,5],own:"A2"},{t:900,A2:[5,7.5]},{t:500,ball:[0,9.4],msg:"Potential GOAL – no cover"}]},
+  {d:[[9,10],[9,6],[9,13],[6,15]],roles:["C","C","C","B"],ok:0,tag:"pressure",why:"Good depth, but nobody presses the ball. A1 steps in and shoots.",
+   anim:[{t:800,A1:[11,10],msg:"No pressure..."},{t:500,ball:[0,10.9],msg:"Potential GOAL – no pressure"}]}
+ ]},
+{mode:4,title:"4v4: Wall give-and-go + trailing runner",q:"A1 has the wall available, but A2 can receive, shoot or combine. A3 makes a trailing run inside. Which shape prioritizes the human receivers while backing up pressure?",
+ att:{A1:[10,3],A2:[13,8],A3:[14,13],A4:[9,16.5]},runs:[[[14,13],[6.5,8]]],
+ opts:[
+  {d:[[8.8,3.7],[6.6,5.6],[9.6,9.5],[5.5,12]],roles:["P","C","C","B"],ok:0,tag:"cover",consequence:"tradeoff",why:"D2 camps near a predicted self-wall rebound, leaving A2 too much space. Tracking A3 and keeping balance helps, but does not replace cover of A2: a human can shoot, pass, combine off the wall or improvise. This shading might help against a proven wall specialist, but it is not the preferred default.",
+   anim:[{t:600,ball:[13,8],own:"A2",msg:"A2 receives with space"},{t:700,A2:[11.5,8],D2:[8.5,7],A3:[8,9],D3:[7.6,8.6],D4:[5,12]},{t:500,msg:"A2 has options – cover recovering"}]},
+  {d:[[8.8,3.7],[9.2,7.2],[8.5,10],[5.5,12]],roles:["P","C","C","B"],ok:1,preferred:1,tag:"all",consequence:"tradeoff",why:"D2 prioritizes human attacker A2, staying goal-side and ready to close the central pass while backing up P's inside shoulder. D3 tracks A3's trailing run and D4 balances deep while watching A4. The wall remains available, but needs precise angle and weight; scan and recover rather than abandon A2 to camp on a rebound. This shape reduces risk, not guarantees a stop.",
+   anim:[{t:600,ball:[13,8],own:"A2",D2:[11.5,7.8],A3:[10,11],D3:[8,9.5],msg:"D2 closes human receiver"},{t:700,A3:[6.5,8],D3:[6.2,8.8],D1:[9,5],D4:[5,11.8],msg:"Trailing run tracked"},{t:600,ball:[15,6],A1:[15,6],own:"A1",msg:"Attack resets – wall still available"}]},
+  {d:[[8.8,3.7],[6.6,5.6],[13,12],[9,15.6]],roles:["P","C","M","M"],ok:0,tag:"balance",why:"Two defenders man-mark high. The trailing runner arrives unmarked in the middle.",
+   anim:[{t:900,A3:[6.5,8]},{t:500,ball:[6.5,8],own:"A3",msg:"Trailing runner free"},{t:400,ball:[0,9.8],msg:"Potential GOAL – no balance"}]},
+  {d:[[8.8,3.7],[6.6,5.6],[7,8],[7.5,10]],roles:["P","C","C","C"],ok:0,tag:"balance",why:"D2 shades toward the rebound instead of A2, and everyone drifts ball side without deep weak-side balance. A2 can receive and find A4 arriving at the back post.",
+   anim:[{t:500,ball:[13,8],own:"A2"},{t:700,A4:[4,14]},{t:500,ball:[4,14],own:"A4"},{t:400,ball:[0,11],msg:"Potential GOAL – back post open"}]}
+ ]},
+{mode:4,title:"4v4: Switch + back-door cut",q:"The ball was switched to A4 on the right while A3 cuts back-door toward the far post. How do the roles rotate?",
+ att:{A1:[14,4],A2:[13,9],A3:[9,12],A4:[12,16.5]},ballAt:"A4",runs:[[[9,12],[3,13]]],
+ opts:[
+  {d:[[10.8,15.6],[9.4,12.8],[8,9],[4.8,10.5]],roles:["P","C","C","B"],ok:1,tag:"all",why:"The nearest defender presses, the next covers inside and picks up the cut, and the old presser drops in as deep balance. Roles move with the ball, not shirt numbers.",
+   anim:[{t:700,A3:[4,12.5],D2:[5,12.6],D4:[4.4,11.4]},{t:500,ball:[4.5,12.4],own:"D2",msg:"Back-door cut shut ✔"}]},
+  {d:[[12,5],[10,8.5],[8,11],[6,13]],roles:["P","C","C","B"],ok:0,tag:"pressure",why:"Nobody rotated. A4 has time and the back-door run is simple.",
+   anim:[{t:700,A3:[3,13]},{t:500,ball:[3,13],own:"A3"},{t:400,ball:[0,10.8],msg:"Potential GOAL – nobody shifted"}]},
+  {d:[[10.8,15.6],[10,13.5],[9.5,11],[9,8]],roles:["P","C","C","C"],ok:0,tag:"balance",why:"Rotation happened, but everyone is at the same depth – nobody protects the far post.",
+   anim:[{t:700,A3:[3,13]},{t:500,ball:[3,13],own:"A3",msg:"Back door open"},{t:400,ball:[0,10.8],msg:"Potential GOAL – no balance"}]},
+  {d:[[10.8,15.6],[11,14],[10,16.8],[6,9]],roles:["P","P","P","B"],ok:0,tag:"cover",why:"Three swarm the ball. A2 is free in the middle.",
+   anim:[{t:500,ball:[13,9],own:"A2"},{t:800,A2:[6,9.5]},{t:500,ball:[0,9.8],msg:"Potential GOAL – no cover"}]}
+ ]},
+{mode:4,title:"4v4: Diagonal through-ball",q:"A1 threatens a diagonal to A3, but strong-side A4 is also available. Which shape covers both shoulders of the presser, stays goal-side of A2 and A4, and protects A3's run?",
+ att:{A1:[14,6],A2:[12,11],A3:[10,15.5],A4:[13,2]},runs:[[[10,15.5],[4,12]]],
+ opts:[
+  {d:[[12.6,6.6],[10.6,8.8],[9.4,12],[5.8,12.3]],roles:["P","C","C","B"],ok:0,tag:"cover",consequence:"tradeoff",why:"This screens the diagonal and A2, but both covers sit inside, leaving strong-side A4 too much room. A4 can receive, shoot or combine with A1. The diagonal might be intercepted, but that does not resolve the flank threat. Prefer cover on both shoulders of P; the actual outcome depends on execution and recovery.",
+   anim:[{t:600,ball:[13,2],own:"A4",msg:"A4 receives on strong side"},{t:700,A4:[11.8,3],D2:[11,5.5],D1:[12,6],msg:"Flank exposed – cover recovering"}]},
+  {d:[[12.6,6.6],[11.2,4.2],[10.2,9],[10.6,15.2]],roles:["P","C","C","M"],ok:0,tag:"balance",why:"Both shoulders of P have cover, but the weak-side defender pushed up tight on A3. One step and A3 can get behind everyone.",
+   anim:[{t:600,A3:[4,12]},{t:500,ball:[4,12],own:"A3",msg:"Through ball"},{t:400,ball:[0,10.4],msg:"Potential GOAL – no balance"}]},
+  {d:[[9,6],[11.2,4.2],[10.2,9],[5.8,12.3]],roles:["C","C","C","B"],ok:0,tag:"pressure",why:"The receivers and depth are covered, but nobody pressures A1, who has time to shoot from range.",
+   anim:[{t:600,A1:[12,6.5]},{t:500,ball:[0,8.9],msg:"Potential GOAL – no pressure"}]},
+  {d:[[12.6,6.6],[11.2,4.2],[10.2,9],[5.8,12.3]],roles:["P","C","C","B"],ok:1,preferred:1,tag:"all",consequence:"tradeoff",why:"D1 pressures A1. D2 covers the strong-side shoulder, goal-side of A4 and close enough to support P. D3 covers the inside shoulder: goal-side of A2 while close enough to back up P if A1 cuts inside. D4 stays deep to balance against A3's diagonal run. Both covers support pressure and watch a real receiver; this connected shape reduces risk rather than guaranteeing a stop.",
+   anim:[{t:600,ball:[13,2],own:"A4",D2:[12,3.2],D3:[10.5,8.5],D1:[12.6,5.5],msg:"Flank cover closes A4"},{t:600,ball:[14,6],own:"A1",D1:[12.6,6.6],D2:[11.2,4.2],D3:[10.2,9],msg:"Inside cover backs up P"},{t:600,A3:[5,12.5],D4:[5.4,12.3]},{t:500,ball:[16,8],A2:[16,8],own:"A2",msg:"Attack resets – both shoulders covered"}]}
+ ]}
+];
+
+/* ===== Endless Practice generator (player-first rules locked in) ===== */
+function rng(s){return function(){s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const GC=[0,10],RH=20,RR=6;
+const ARCH=[
+ {k:"central",title:"Central build-up",A1:[14,10],o:[[12,4],[11,16]],x4:[10,12.5]},
+ {k:"wall",title:"Ball near the wall",wall:1,A1:[13,3],o:[[12,10],[9,15]],x4:[9.5,7]},
+ {k:"overlap",title:"Overlap down the boards",wall:1,A1:[12,4],o:[[15,2.2],[10,13]],x4:[15,12]},
+ {k:"givego",title:"Wall give-and-go threat",wall:1,A1:[10.5,3],o:[[13,9],[10,15]],x4:[16,6]},
+ {k:"switch",title:"Switch of play",A1:[14,16],o:[[13,10],[11,4]],x4:[9.5,8]},
+ {k:"trail",title:"Trailing runner",A1:[12,9],o:[[15,12],[11,15.5]],x4:[10,5]},
+ {k:"diag",title:"Diagonal through-ball",A1:[14,6],o:[[12,11],[10,15.5]],x4:[13,2]},
+ {k:"overload",title:"Central overload",only4:1,A1:[14,10],o:[[12,6.5],[12,13.5]],x4:[9,10]}];
+const dst=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+const uv=(a,b)=>{const d=dst(a,b)||1;return[(b[0]-a[0])/d,(b[1]-a[1])/d]};
+const add=(a,u,k)=>[+(a[0]+u[0]*k).toFixed(2),+(a[1]+u[1]*k).toFixed(2)];
+const r2=p=>[+p[0].toFixed(2),+p[1].toFixed(2)];
+function inRink(p){const[x,y]=p;if(x<1.5||x>19||y<1||y>19)return false;
+  if(x<RR&&(y<RR||y>RH-RR))return dst(p,[RR,y<RR?RR:RH-RR])<=RR-0.8;return true}
+function coverPt(a,d1,maxd){if(maxd&&a[0]>d1[0]-1.5){const side=a[1]>d1[1]?1:-1;return r2([d1[0]-2.2,d1[1]+side*1.6])}
+  let q=add(a,uv(a,GC),1.6);const d=dst(q,d1);if(maxd&&d>maxd)q=add(q,uv(q,d1),d-maxd+0.15);q[0]=Math.min(q[0],a[0]-0.6);if(maxd)q[0]=Math.min(q[0],d1[0]-1);return r2(q)}
+function genScenario(mode,arch,r){
+  const flip=r()<.5,F=p=>flip?[p[0],RH-p[1]]:p,J=(p,a)=>r2([p[0]+(r()*2-1)*a,p[1]+(r()*2-1)*a]);
+  const A1=J(F(arch.A1),1),others=(mode===4?[...arch.o,arch.x4]:arch.o).map(p=>J(F(p),1.2));
+  const att={A1};others.forEach((p,i)=>att["A"+(i+2)]=p);
+  const ks=Object.keys(att).slice(1);
+  const threat=k=>dst(A1,att[k])+0.5*dst(att[k],GC)+(att[k][0]>A1[0]-0.5?4:0);
+  const r1k=[...ks].sort((a,b)=>threat(a)-threat(b))[0];
+  const rest=ks.filter(k=>k!==r1k);
+  const fark=[...rest].sort((a,b)=>Math.abs(att[b][1]-A1[1])-Math.abs(att[a][1]-A1[1]))[0];
+  const r2k=rest.find(k=>k!==fark);
+  const r1=att[r1k],far=att[fark],wallSide=A1[1]<10?1.8:RH-1.8;
+  let D1=add(A1,uv(A1,GC),1.4);if(arch.wall)D1[1]+=A1[1]<10?0.5:-0.5;D1=r2(D1);
+  const C1=coverPt(r1,D1,3.4),C2=r2k?coverPt(att[r2k],D1,0):null;
+  const minX=Math.min(D1[0],C1[0],C2?C2[0]:99);
+  const B=r2([Math.max(2.5,Math.min(minX-2.2,far[0]-1.2)),10+(far[1]-10)*.45]);
+  const pref=C2?[D1,C1,C2,B]:[D1,C1,B],bi=pref.length-1;
+  const roles=C2?["P","C","C","B"]:["P","C","B"];
+  const shot=y=>[0,y>10?10.9:9.1];
+  const back=r2([Math.min(19,r1[0]+3),r1[1]]);
+  const options=[];
+  options.push({d:pref,roles,ok:1,preferred:1,tag:"all",kind:"preferred",
+    why:`P closes ${"A1"} quickly and angles the press away from goal${arch.wall?", showing A1 down the wall":""}. C sits behind P, close enough to back them up, while staying goal-side of ${r1k} – the most dangerous human receiver.${C2?` The second C stays goal-side of ${r2k}.`:""} B is deepest and tucked inside: cover of the cover, still watching ${fark}.`,
+    anim:[{t:600,D1:add(A1,uv(A1,GC),0.9),msg:"P closes the ball"},{t:500,A1:r2([Math.min(19,A1[0]+1.2),A1[1]])},{t:700,ball:back,[r1k]:back,own:r1k,msg:"No forward option – attack goes backwards ✔"}]});
+  const dropP=r2([Math.max(2.5,A1[0]-4.5),10+(A1[1]-10)*.6]),step=add(A1,uv(A1,GC),3);
+  options.push({d:pref.map((p,i)=>i===0?dropP:p),roles,ok:0,tag:"pressure",kind:"pressure",
+    why:`Nobody presses A1. With time and space, A1 steps toward goal and shoots – pressure must come first, then cover and balance can work.`,
+    anim:[{t:800,A1:step,msg:"No pressure – A1 steps in"},{t:500,ball:shot(step[1]),msg:"Potential GOAL – no pressure"}]});
+  const badC=arch.wall?r2([Math.max(2.5,D1[0]-2.2),wallSide]):r2([A1[0]-1,A1[1]+(A1[1]<10?1.3:-1.3)]);
+  const run=r2([4.5,10+(r1[1]-10)*.4]);
+  options.push({d:pref.map((p,i)=>i===1?badC:p),roles,ok:0,tag:"cover",kind:"cover",
+    why:arch.wall?`C camps on a possible self-wall rebound and leaves ${r1k} free. The wall can only return one ball and needs perfect angle and weight; ${r1k} can receive, shoot or combine. Mark the human first, then scan for the wall.`:`C joins P on the ball – a double-team with no cover behind. One pass to ${r1k} and the whole shape is beaten.`,
+    anim:[{t:600,ball:r1,own:r1k,msg:`Pass to the open ${r1k}`},{t:800,[r1k]:run,D2:r2([badC[0]-1,badC[1]])},{t:500,ball:shot(run[1]),msg:"Potential GOAL – no cover"}]});
+  const tight=r2([far[0]-0.9,far[1]]),runB=r2([4,10+(far[1]-10)*.35]);
+  const bRoles=[...roles];bRoles[bi]="M";
+  options.push({d:pref.map((p,i)=>i===bi?tight:p),roles:bRoles,ok:0,tag:"balance",kind:"balance",
+    why:`The deepest defender stepped up tight and square on ${fark}. Nobody protects the space behind the cover – one run and a through ball beat everyone.`,
+    anim:[{t:600,[fark]:runB,msg:"Run in behind"},{t:500,ball:runB,own:fark,msg:"Through ball – no balance"},{t:400,ball:shot(runB[1]),msg:"Potential GOAL – no balance"}]});
+  const names=ks.join(", ").replace(/, ([^,]*)$/," and $1");
+  return{mode,gen:1,arch:arch.k,title:"Endless: "+arch.title,
+    q:`A1 has the ball${arch.wall?" near the wall":""}. ${names} offer options. Pick the shape that best applies pressure, cover and balance.`,
+    att,meta:{r1k,r2k,fark,wall:!!arch.wall},opts:options};
+}
+function validateScenario(sc){
+  const pref=sc.opts.find(o=>o.preferred),A=Object.values(sc.att);
+  if(sc.opts.filter(o=>o.ok).length!==1)return false;
+  for(const p of A)if(!inRink(p))return false;
+  for(const o of sc.opts){for(const p of o.d)if(!inRink(p))return false;
+    for(const f of o.anim)for(const k in f)if(Array.isArray(f[k])&&!(k==="ball"&&f[k][0]===0)&&!inRink(f[k]))return false;}
+  const all=[...A,...pref.d];for(let i=0;i<all.length;i++)for(let j=i+1;j<all.length;j++)if(dst(all[i],all[j])<0.9)return false;
+  for(const o of sc.opts)if(o!==pref&&Math.max(...o.d.map((p,i)=>dst(p,pref.d[i])))<2.5)return false;
+  const r1=sc.att[sc.meta.r1k],C=pref.d[1];
+  if(!(C[0]<r1[0])||!(C[0]<=pref.d[0][0]-0.8)||dst(C,pref.d[0])>3.5||(r1[0]<=pref.d[0][0]-1.5&&dst(C,r1)>3))return false;
+  if(pref.anim.some(f=>f.ball&&f.ball[0]===0))return false;
+  return true;
+}
+function buildBatch(mode,seed){
+  const r=rng(seed),n=mode===3?8:6,pool=ARCH.filter(a=>mode===4||!a.only4),out=[];let last=null;
+  while(out.length<n){let a;do a=pool[r()*pool.length|0];while(a===last&&pool.length>1);
+    let sc=null;for(let t=0;t<60&&!sc;t++){const c=genScenario(mode,a,r);if(validateScenario(c))sc=c}
+    if(!sc)continue;last=a;
+    const o=sc.opts;for(let i=o.length-1;i>0;i--){const j=r()*(i+1)|0;[o[i],o[j]]=[o[j],o[i]]}
+    out.push(sc)}
+  return out;
+}
+
+/* Curated attack only: triangles, ordinary shapes, independent reaction/execution samples.
+   These are illustrative game weights, not measured soccer success percentages. */
+function attackingPlay(name,read,why,path,frames,receiver,target,reset=false){
+  return {name,read,why,path,frames,receiver,target,reset};
+}
+const ATTACK=[
+ {title:"Pass and move",q:"Blue's cover is pulled toward A3. A2 offers a diagonal passing angle. Choose Red's play.",
+  att:{A1:[14,10],A2:[11,5],A3:[10,16]},d:[[12.6,10],[10,13],[7,11]],
+  opts:[
+   attackingPlay("Pass to A2, then support","Open angle","A2 is available on a diagonal. A1 moves after passing to offer a return option; Blue can still shift across.",[[14,10],[11,5],[7,7]],[{t:450,ball:[11,5],own:"A2",D1:[12,9],D2:[10,11]},{t:600,A1:[10,8],A2:[7,7],D1:[10.8,8.8],D2:[8.5,9.5],D3:[6,10]}],"A2",[7,7]),
+   attackingPlay("Dribble through the middle","Under pressure","P blocks the direct route and B protects the middle. A dribble can work, but it asks A1 to beat connected defenders.",[[14,10],[9,10]],[{t:450,A1:[12,10],D1:[11.2,10]},{t:600,A1:[9,10],D1:[9.8,10.5],D2:[8.5,12],D3:[6.5,10]}],"A1",[9,10]),
+   attackingPlay("Recycle through A3","Keep possession","A3 has a support angle. Moving the ball can draw Blue across without forcing a central dribble.",[[14,10],[10,16],[15,14]],[{t:450,ball:[10,16],own:"A3",D2:[9,14]},{t:600,A3:[15,14],A1:[16,9],A2:[12,5],D1:[13,11],D2:[12,13],D3:[8,10]}],"A3",[15,14],true)
+  ]},
+ {title:"Use the far side",q:"Blue has shifted toward the ball. A3 holds the far-side angle while A2 supports nearby. Choose Red's play.",
+  att:{A1:[14,5],A2:[16,10],A3:[11,16]},d:[[12.6,5.6],[10.5,8],[7,9]],
+  opts:[
+   attackingPlay("Switch through A2 to A3","Open angle","The support player offers a simple two-pass switch. A3 may receive before Blue finishes sliding across.",[[14,5],[16,10],[11,16]],[{t:450,ball:[16,10],own:"A2",D1:[13,7],D2:[11,9]},{t:600,ball:[11,16],own:"A3",A1:[13,8],D1:[12,10],D2:[10,12.5],D3:[7,12]}],"A3",[11,16]),
+   attackingPlay("Drive inside toward cover","Under pressure","Blue's cover is already inside the presser. Driving there can beat a defender, but moves toward the crowded side.",[[14,5],[9,8]],[{t:450,A1:[12,6.5],D1:[11.5,6]},{t:600,A1:[9,8],D1:[10,7],D2:[8.7,8.6],D3:[6,9]}],"A1",[9,8]),
+   attackingPlay("Pass to A2 and hold","Keep possession","A2 is behind the ball with a clear angle. Red can keep its triangle and wait instead of forcing the first forward route.",[[14,5],[16,10]],[{t:450,ball:[16,10],own:"A2",D1:[13,6.5]},{t:600,A1:[15,4],A3:[13,16],D2:[11,9],D3:[8,10]}],"A2",[16,10],true)
+  ]},
+ {title:"Combine near the boards",q:"A1 is near the wall. A2 offers an inside diagonal and A3 balances the triangle. Choose Red's play.",
+  att:{A1:[13,3],A2:[12,9],A3:[9,15]},d:[[11.5,4],[9.5,7],[6.5,11]],
+  opts:[
+   attackingPlay("Pass to A2 and move down the wall","Open angle","A human receiver can return the pass, turn or hold it. A1's short run offers another angle; C may close A2 in time.",[[13,3],[12,9],[9,3]],[{t:450,ball:[12,9],own:"A2",A1:[11,3],D1:[10.6,4],D2:[10.5,8]},{t:600,ball:[9,3],own:"A1",A1:[9,3],D1:[9.5,4.2],D2:[9,6.5],D3:[6,10]}],"A1",[9,3]),
+   attackingPlay("Self-wall pass past P","Under pressure","The boards are available, but angle and weight must be right. Connected cover can recover; a rebound is not automatically a breakthrough.",[[13,3],[10,0.2],[8,3]],[{t:350,ball:[10,0.2],A1:[11,2.8],D1:[10.5,3.8]},{t:350,ball:[8,3],A1:[8,3],own:"A1",D1:[9,4],D2:[8,6],D3:[6,10]}],"A1",[8,3]),
+   attackingPlay("Return inside to A2","Keep possession","A2 is a support option, not just a wall-pass target. Red can hold the ball and rebuild its triangle.",[[13,3],[12,9]],[{t:450,ball:[12,9],own:"A2",D2:[10.5,8]},{t:600,A2:[15,10],A1:[14,4],A3:[11,16],D1:[12,6],D2:[12,9],D3:[8,12]}],"A2",[15,10],true)
+  ]},
+ {title:"Compact blue, patient red",q:"Blue has connected pressure, cover and balance. A2 and A3 provide support angles. Choose Red's play.",
+  att:{A1:[14,10],A2:[16,5],A3:[16,15]},d:[[12.6,10],[10.5,7.5],[8,12]],
+  opts:[
+   attackingPlay("Reset to A2 and widen","Keep possession","There is no obvious forward opening. A safe diagonal reset keeps the triangle and may move Blue before Red attacks again.",[[14,10],[16,5]],[{t:450,ball:[16,5],own:"A2",D1:[13,8]},{t:600,A1:[16,10],A3:[17,16],D2:[12,6.5],D3:[9,11]}],"A2",[16,5],true),
+   attackingPlay("Shoot through the compact block","Under pressure","P can contest the strike and the keeper is set. A good shot might create a chance, but the block makes execution harder.",[[14,10],[0,10.5]],[{t:450,A1:[13.8,10],D1:[12.9,10]},{t:600,ball:[9,10.5],D2:[10,8],D3:[7,11]}],"A1",[9,10.5]),
+   attackingPlay("Switch to A3 and probe","Keep possession","The other side is a valid support angle too. Keep possession and let the next receiver read Blue's shift rather than demand an immediate chance.",[[14,10],[16,15]],[{t:450,ball:[16,15],own:"A3",D1:[13,12]},{t:600,A1:[16,9],A2:[17,4],D2:[12,10],D3:[10,13]}],"A3",[16,15],true)
+  ]}
+ ,{mode:4,title:"4v4: Target pivot layoff",q:"A4 holds up centrally in front of B. A2 and A3 give wide angles. Choose Red's play.",
+  att:{A1:[15,10],A2:[14,4],A3:[13,16],A4:[9.2,10]},roles:["P","C","C","B"],d:[[13.4,10],[11.5,5.5],[11,14.5],[7.6,10]],
+  opts:[
+   attackingPlay("Feed A4, lay off to A3","Open angle","A4 pins B and sets the ball back to A3 running inside. Blue's cover may still close the shot lane.",[[15,10],[9.2,10],[10.5,13]],[{t:450,ball:[9.2,10],own:"A4",A3:[11.5,14],D1:[13,10.5]},{t:550,ball:[10.5,13],own:"A3",A3:[10.5,13],A4:[8.6,10.5],D3:[10,14],D4:[7.2,11]}],"A3",[10.5,13]),
+   attackingPlay("Shoot past P from distance","Under pressure","P is close and the keeper sees it early. A strike can still create a rebound, but it is a low-percentage start.",[[15,10],[0,10.5]],[{t:450,A1:[14.6,10],D1:[13.7,10]},{t:550,ball:[8.5,10.4],D4:[7.4,10.3]}],"A1",[8.5,10.4]),
+   attackingPlay("Recycle to A2 and rebuild","Keep possession","A2 is free on the boards side. Keeping the box shape lets A4 reset the hold-up for the next ball.",[[15,10],[14,4]],[{t:450,ball:[14,4],own:"A2",D2:[12.5,5]},{t:600,A1:[16,9],A4:[10,9],D1:[13,7],D3:[11,12],D4:[8,9.5]}],"A2",[14,4],true)
+  ]},
+ {mode:4,title:"4v4: Weak-side back-door cut",q:"Red overloads the boards side and Blue slides across. A3 is alone on the weak side. Choose Red's play.",
+  att:{A1:[13,4],A2:[15,7.5],A3:[12,15],A4:[10.5,2.5]},roles:["P","C","C","B"],d:[[11.8,4.6],[9.6,3.6],[10.6,7.8],[7.2,10]],
+  opts:[
+   attackingPlay("Slip A3 back-door behind B","Open angle","B is pulled toward the ball. A3 cuts behind into space; a well-weighted diagonal can find the run before B turns.",[[13,4],[7,13.5]],[{t:350,A3:[9.5,14],D4:[7.4,11]},{t:550,ball:[7,13.5],own:"A3",A3:[7,13.5],D4:[7,12.3],D3:[9,10]}],"A3",[7,13.5]),
+   attackingPlay("Force it down the wall to A4","Under pressure","A4 is tight to the boards with C goal-side. The pass can work, but Blue is already crowded on that side.",[[13,4],[10.5,2.5]],[{t:450,ball:[10.5,2.5],own:"A4",D2:[10,2.8]},{t:550,A4:[8.5,2.5],D2:[8.6,3.2],D1:[10.5,4]}],"A4",[8.5,2.5]),
+   attackingPlay("Reset to A2 and switch later","Keep possession","A2 is free behind the ball. Resetting keeps Red's shape and asks Blue to slide back across again.",[[13,4],[15,7.5]],[{t:450,ball:[15,7.5],own:"A2",D1:[13,6]},{t:600,A3:[14,15],A1:[14,4],D3:[11.5,10],D4:[8,11]}],"A2",[15,7.5],true)
+  ]},
+ {mode:4,title:"4v4: Up-back-and-through",q:"A1 is on the boards with P closing. A2 trails behind the ball and A3 waits between Blue lines. Choose Red's play.",
+  att:{A1:[12,3],A2:[15,6],A3:[10.5,10],A4:[13,15.5]},roles:["P","C","C","B"],d:[[10.8,3.8],[9.4,6.4],[11,13.5],[7,10.5]],
+  opts:[
+   attackingPlay("Lay back to A2, slip A3 through","Open angle","The back pass turns P, then A2 has a forward angle into A3's run. Blue's balance can still step across.",[[12,3],[15,6],[7.5,8.5]],[{t:400,ball:[15,6],own:"A2",D1:[12.5,4.8]},{t:550,ball:[7.5,8.5],own:"A3",A3:[7.5,8.5],D2:[8.6,7.2],D4:[6.6,9.8]}],"A3",[7.5,8.5]),
+   attackingPlay("Dribble down the boards","Under pressure","P and C are connected on the wall side. A1 can beat P, but cover is ready to step in.",[[12,3],[8.5,2.5]],[{t:450,A1:[10.5,2.8],D1:[10,3.4]},{t:550,A1:[8.5,2.5],D2:[8.6,3.6],D1:[9.4,3.2]}],"A1",[8.5,2.5]),
+   attackingPlay("Lay back to A2, switch to A4","Keep possession","A4 holds the far-side angle. Moving the ball across keeps possession and stretches Blue's box.",[[12,3],[15,6],[13,15.5]],[{t:400,ball:[15,6],own:"A2",D1:[12.5,4.8]},{t:550,ball:[13,15.5],own:"A4",D3:[11.5,14],D4:[8,12],D2:[10,9]}],"A4",[13,15.5],true)
+  ]},
+ {mode:4,title:"4v4: Compact blue, patient red",q:"Blue is compact: pressure, two connected covers and B tight on A4. Choose Red's play.",
+  att:{A1:[14,10],A2:[16.5,4.5],A3:[16.5,15.5],A4:[10.6,10]},roles:["P","C","C","B"],d:[[12.6,10],[11,6.6],[11,13.4],[9.4,10]],
+  opts:[
+   attackingPlay("Reset to A2 and widen","Keep possession","Every forward lane is screened. A diagonal reset keeps the ball and may pull a cover out of the box.",[[14,10],[16.5,4.5]],[{t:450,ball:[16.5,4.5],own:"A2",D1:[13.5,7]},{t:600,A1:[16,10],A4:[11,8.5],D2:[12.5,5.8],D4:[9.6,9]}],"A2",[16.5,4.5],true),
+   attackingPlay("Force it into A4's feet","Under pressure","A4 has B on its back and two covers close by. The pass may stick, but A4 receives facing away from goal.",[[14,10],[10.6,10]],[{t:450,ball:[10.6,10],own:"A4",D4:[9.9,10]},{t:550,A4:[10.8,11],D3:[10.8,12.2],D4:[10,10.8]}],"A4",[10.8,11]),
+   attackingPlay("Switch to A3 and probe","Keep possession","The far side is open but not dangerous yet. Keep the ball moving and read Blue's slide.",[[14,10],[16.5,15.5]],[{t:450,ball:[16.5,15.5],own:"A3",D1:[13.5,13]},{t:600,A1:[16,9],A2:[17,5],D3:[12.5,14],D4:[9.6,11]}],"A3",[16.5,15.5],true)
+  ]}
+];
+// ~10% loose execution per step, so roughly 20% across a two-step move.
+const EXEC_OK=.9;
+function sampleAttack(sc,o,random=Math.random){
+  const reactsLate=random()<(o.late??(o.read==="Under pressure"?.25:.65));
+  const clean=random()<EXEC_OK;
+  const frames=o.frames.map(f=>({...f})),receiver=o.receiver;
+  if(reactsLate)for(const frame of frames)for(let i=0;i<sc.d.length;i++){
+    const key="D"+(i+1);if(frame[key])frame[key]=frame[key].map((v,j)=>sc.d[i][j]+(v-sc.d[i][j])*.45);
+  }
+  let outcome,note,finish;
+  if(!clean){
+    outcome="Turnover";note="Execution: a loose touch or misplaced pass lets Blue collect.";
+    const loose=[o.target[0]-1,o.target[1]];
+    finish={t:550,ball:loose,D2:loose,own:"D2",msg:"Turnover – loose execution"};
+  }else if(o.reset){
+    outcome="Possession kept";note=reactsLate?"Blue shifts late; Red keeps its triangle for the next play.":"Blue shifts with the ball; Red keeps possession without forcing a chance.";
+    finish={t:550,ball:o.target,[receiver]:o.target,own:receiver,msg:"Possession kept – triangle rebuilt"};
+  }else if(reactsLate&&!sc.step2){
+    outcome="Chance created";note="Blue reacts late and the pass or touch comes off. Red is through, but the move is not finished yet.";
+    finish={t:550,ball:o.target,[receiver]:o.target,own:receiver,msg:"Opening – next decision"};
+  }else if(reactsLate){
+    outcome="Chance created";note="Blue reacts late and the pass or touch comes off. This opens a shot, not a guaranteed goal.";
+    finish={t:700,ball:[3.5,10.5],[receiver]:[4.1,10.5],own:receiver,D3:[5,12],msg:"Chance created – keeper still to beat"};
+  }else{
+    outcome="Contested";note="Blue recovers in time. The action comes off, but a defender or keeper contests the next ball.";
+    finish={t:550,ball:[o.target[0]-1,o.target[1]],D2:[o.target[0]-1.5,o.target[1]+.8],own:null,msg:"Contested – Blue recovers"};
+  }
+  // Explicit possession changes prevent the ball snapping back after a shot.
+  return {outcome,note,reactsLate,clean,d:sc.d,roles:sc.roles,anim:[...frames,finish]};
+}
+
+/* Chain play: after a step-1 play keeps the ball, Blue re-forms PCB around the new carrier.
+   About 25% of the time (fatigue) Blue makes one recognizable mistake that Red can exploit. */
+const MISTAKE_RATE=.3,GOALC=[0,10];
+function clampP(p){return[Math.max(1.5,Math.min(19,p[0])),Math.max(1,Math.min(19,p[1]))].map(v=>Math.round(v*10)/10)}
+function toward(a,b,dist){const dx=b[0]-a[0],dy=b[1]-a[1],l=Math.hypot(dx,dy)||1;return[a[0]+dx/l*dist,a[1]+dy/l*dist]}
+function endState(sc,res){const att={},d=sc.d.map(p=>[...p]);for(const k in sc.att)att[k]=[...sc.att[k]];
+  for(const f of res.anim){for(const k in att)if(f[k])att[k]=[...f[k]];d.forEach((_,i)=>{if(f["D"+(i+1)])d[i]=[...f["D"+(i+1)]]})}return{att,d}}
+function followUp(sc,o,res,random=Math.random){
+  const {att,d:prev}=endState(sc,res),car=o.receiver,cp=att[car],n=prev.length;
+  const others=Object.keys(att).filter(k=>k!==car).sort((a,b)=>att[a][0]-att[b][0]);
+  const used=new Set(),nd=new Array(n),roles=new Array(n);
+  const nearest=p=>{let bi=-1,bd=1e9;prev.forEach((q,i)=>{if(!used.has(i)){const dd=Math.hypot(q[0]-p[0],q[1]-p[1]);if(dd<bd){bd=dd;bi=i}}});used.add(bi);return bi};
+  const P=nearest(cp);nd[P]=clampP(toward(cp,GOALC,1.4));roles[P]="P";
+  const mark={};others.forEach((k,j)=>{const i=nearest(att[k]);mark[k]=i;const a=att[k];
+    nd[i]=clampP(j===0?coverPt(a,nd[P],3.5):[a[0]-1.8,a[1]*.7+3]);roles[i]=j===0?"C":"C"});
+  // deepest non-presser is balance
+  let bi=-1;nd.forEach((p,i)=>{if(i!==P&&(bi<0||p[0]<nd[bi][0]))bi=i});roles[bi]="B";
+  const r=random();let mistake=null,exposed=null;
+  if(r<MISTAKE_RATE){const kinds=["late","swarm","lazy"];mistake=kinds[Math.floor(random()*3)];
+    if(mistake==="late")nd[P]=clampP(toward(cp,GOALC,3.4));
+    else{exposed=others[mistake==="swarm"?0:others.length-1];const i=mark[exposed];
+      nd[i]=mistake==="swarm"?clampP([cp[0]-1.2,cp[1]+(cp[1]>nd[P][1]?1:-1)*1.3]):clampP(prev[i].map((v,j)=>v+(nd[i][j]-v)*.25))}}
+  const T=exposed||others[0],tp=att[T],ti=mark[T];
+  const passTgt=clampP(toward(tp,GOALC,1));
+  const shotTgt=clampP(toward(cp,GOALC,mistake==="late"?3:1.5));
+  const resetK=others.reduce((a,b)=>att[b][0]>att[a][0]?b:a),rp=att[resetK],resetTgt=clampP([Math.min(18,rp[0]+1),rp[1]]);
+  const D=i=>"D"+(i+1);
+  const opts=[
+    {name:`Pass to ${T} and attack`,read:exposed?"Open angle":"Under pressure",late:exposed?.8:.35,
+     why:exposed?`${T} has been left: ${mistake==="swarm"?"two Blue players went to the ball":"Blue's tired defender didn't recover"}. Hit the free player.`:`Blue rotated cleanly: C is goal-side of ${T}. The pass can work, but it is contested.`,
+     path:[cp,tp,passTgt],frames:[{t:420,ball:tp,own:T,[D(P)]:toward(nd[P],tp,1.5)},{t:500,[T]:passTgt,[D(ti)]:toward(nd[ti],passTgt,exposed?.6:1.4)}],receiver:T,target:passTgt},
+    {name:mistake==="late"?`${car} drives and shoots`:`${car} turns and shoots`,read:mistake==="late"?"Open angle":"Under pressure",late:mistake==="late"?.8:.2,
+     why:mistake==="late"?"P is slow to close (fatigue). That gives space to drive and strike.":"P is tight and goal-side. A shot through pressure is low-percentage.",
+     path:[cp,shotTgt],frames:[{t:450,[car]:shotTgt,[D(P)]:toward(nd[P],shotTgt,mistake==="late"?.8:2)}],receiver:car,target:shotTgt},
+    {name:`Reset to ${resetK}`,read:"Keep possession",why:"Safe and patient: keep the ball and make Blue shift again.",
+     path:[cp,resetTgt],frames:[{t:450,ball:resetTgt,own:resetK,[resetK]:resetTgt}],receiver:resetK,target:resetTgt,reset:true}];
+  const reveal={late:"Blue's mistake: P closed down slowly (fatigue), leaving time to shoot.",swarm:`Blue's mistake: two defenders went to the ball, leaving ${exposed} free.`,lazy:`Blue's mistake: a tired defender didn't recover, leaving ${exposed} free.`}[mistake]||"Blue rotated into good pressure, cover and balance – no obvious mistake.";
+  return{title:`Next decision: ${car} on the ball`,q:`${car} has it. Blue rotates to the new ball. Read their shape and choose the next play.`,
+    att,ballAt:car,d:nd,roles,mode:sc.mode,step2:true,mistake,reveal,opts};
+}
+
+const cv=document.getElementById("field"),cx=cv.getContext("2d");
+const VB={x0:-1.6,y0:-0.6,w:22.2,h:21.2};
+function px(c,p){const s=c.width/VB.w;return[(p[0]-VB.x0)*s,(p[1]-VB.y0)*s]}
+function drawField(c){
+  const g=c.getContext("2d"),s=c.width/VB.w;g.clearRect(0,0,c.width,c.height);
+  g.save();g.translate(-VB.x0*s,-VB.y0*s);g.scale(s,s);
+  // rink with rounded end corners (our end), straight cut at halfway
+  g.beginPath();g.moveTo(W,0);g.lineTo(R,0);g.arcTo(0,0,0,R,R);g.lineTo(0,H-R);g.arcTo(0,H,R,H,R);g.lineTo(W,H);g.closePath();
+  g.fillStyle="#1f5a35";g.fill();g.lineWidth=.35;g.strokeStyle="#d9e2dc";g.stroke();
+  g.strokeStyle="rgba(255,255,255,.55)";g.lineWidth=.08;
+  g.setLineDash([.5,.4]);g.beginPath();g.moveTo(W,0);g.lineTo(W,H);g.stroke();g.setLineDash([]);
+  g.beginPath();g.arc(W,H/2,3,Math.PI/2,Math.PI*1.5);g.stroke();
+  g.beginPath();g.arc(0,H/2,5.5,-Math.PI/2,Math.PI/2);g.stroke();
+  g.fillStyle="rgba(255,255,255,.8)";g.fillRect(-1.1,GOAL[0],1.1,GOAL[1]-GOAL[0]);
+  g.fillStyle="#1f5a35";g.fillRect(-.9,GOAL[0]+.2,.9,GOAL[1]-GOAL[0]-.4);
+  g.restore();
+}
+function player(c,p,col,label,r){
+  const g=c.getContext("2d"),s=c.width/VB.w,[x,y]=px(c,p);r=(r||.55)*s;
+  g.beginPath();g.arc(x,y,r,0,7);g.fillStyle=col;g.fill();g.lineWidth=Math.max(1,s*.08);g.strokeStyle="#0b130e";g.stroke();
+  if(label){g.fillStyle="#fff";g.font=`bold ${r*1.1}px system-ui`;g.textAlign="center";g.textBaseline="middle";g.fillText(label,x,y+1)}
+}
+function arrow(c,a,b){const g=c.getContext("2d"),[x1,y1]=px(c,a),[x2,y2]=px(c,b);
+  g.strokeStyle="rgba(229,72,77,.9)";g.lineWidth=Math.max(1.5,c.width/300);g.setLineDash([6,5]);g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.stroke();g.setLineDash([]);
+  const an=Math.atan2(y2-y1,x2-x1),h=c.width/60;g.beginPath();g.moveTo(x2,y2);g.lineTo(x2-h*Math.cos(an-.4),y2-h*Math.sin(an-.4));g.lineTo(x2-h*Math.cos(an+.4),y2-h*Math.sin(an+.4));g.fillStyle="rgba(229,72,77,.9)";g.fill()}
+function traceOf(sc,o){const st=initState(sc,o);let own=st.owner;const pts=[[...st.ball]];
+  o.anim.forEach(s=>{for(const k in s)if(Array.isArray(s[k])&&k!=="ball")st[k]=s[k];
+    if(s.ball){pts.push(s.ball);own=null}else if(own&&s[own])pts.push([s[own][0]-.6,s[own][1]]);if(s.own)own=s.own});return pts}
+function drawTrace(c,pts,ok){const g=c.getContext("2d"),col=getComputedStyle(document.documentElement).getPropertyValue(ok==="tradeoff"?"--acc":ok?"--ok":"--bad").trim();
+  const e=px(c,pts[pts.length-1]),s=c.width/22.2;
+  g.fillStyle=col;g.globalAlpha=.22;g.beginPath();g.arc(e[0],e[1],2.2*s,0,7);g.fill();g.globalAlpha=1;
+  for(let i=1;i<pts.length;i++){const a=px(c,pts[i-1]),b=px(c,pts[i]);g.strokeStyle=col;g.lineWidth=Math.max(2,s*.15);g.setLineDash([s*.4,s*.25]);
+    g.beginPath();g.moveTo(...a);g.lineTo(...b);g.stroke();g.setLineDash([]);const an=Math.atan2(b[1]-a[1],b[0]-a[0]),h=s*.7;
+    g.fillStyle=col;g.beginPath();g.moveTo(...b);g.lineTo(b[0]-h*Math.cos(an-.45),b[1]-h*Math.sin(an-.45));g.lineTo(b[0]-h*Math.cos(an+.45),b[1]-h*Math.sin(an+.45));g.fill()}}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a}
+let MODE=3,SS=[],SET="cur",SIDE="defend",attackPlays=0,attackChances=0;
+function gkPos(ball){return[.8,Math.min(GOAL[1]-.4,Math.max(GOAL[0]+.4,10+(ball[1]-10)*.3))]}
+function render(c,st,sc,ghost){
+  drawField(c);const g=c.getContext("2d");
+  if(sc.runs&&!st.anim)sc.runs.forEach(r=>arrow(c,r[0],r[1]));
+  if(st.plan&&!st.anim)for(let i=1;i<st.plan.length;i++)arrow(c,st.plan[i-1],st.plan[i]);
+  if(ghost)ghost.forEach((p,i)=>{g.globalAlpha=.35;player(c,p,"#3ecf8e",""+(i+1));g.globalAlpha=1});
+  player(c,st.GK,"#f2c14e","GK");
+  Object.keys(sc.att).forEach(k=>player(c,st[k],"#e5484d",k));
+  st.dk.forEach((k,i)=>player(c,st[k],"#3d8bfd",st.roles[i]));
+  if(st.trace)drawTrace(c,st.trace,st.ok);
+  player(c,st.ball,"#ffffff","",.3);
+  if(st.msg&&c.width>300){g.font="bold 30px system-ui";const size=Math.min(30,30*(c.width-48)/g.measureText(st.msg).width);g.font=`bold ${size}px system-ui`;g.textAlign="center";const w=g.measureText(st.msg).width+30,x=c.width/2;
+    g.fillStyle="rgba(0,0,0,.65)";g.fillRect(x-w/2,c.height-70,w,46);g.fillStyle=st.msg.includes("GOAL")?"#ff6b6b":st.msg.includes("✔")?"#3ecf8e":"#fff";g.textBaseline="middle";g.fillText(st.msg,x,c.height-47)}
+}
+function initState(sc,opt){
+  const st={owner:sc.ballAt||"A1"};for(const k in sc.att)st[k]=[...sc.att[k]];
+  st.dk=opt.d.map((_,i)=>"D"+(i+1));st.dk.forEach((k,i)=>st[k]=[...opt.d[i]]);
+  st.roles=opt.roles||["P","C","B"];
+  st.ball=[st[st.owner][0]-.6,st[st.owner][1]];st.GK=gkPos(st.ball);return st;
+}
+
+let idx=0,score=0,answered=0,missed={pressure:0,cover:0,balance:0},anim=null,animTimer=null,playId=0;
+const panel=document.getElementById("panel");
+function stopPlay(){cancelAnimationFrame(anim);clearTimeout(animTimer);playId++}
+function play(sc,opt,ghost,done){
+  stopPlay();const id=playId,reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;const st=initState(sc,opt);st.anim=1;let i=0,t0=null,from=null;
+  const keys=[...Object.keys(sc.att),...st.dk,"ball"];
+  function step(ts){
+    if(id!==playId)return;
+    const s=opt.anim[i];if(!s){render(cv,st,sc,ghost);done&&done();return}
+    if(t0===null){t0=ts;from={};keys.forEach(k=>from[k]=[...st[k]]);if(s.ball)st.owner=null;else if(s.own)st.owner=s.own;if(s.msg)st.msg=s.msg}
+    const p=reduced?1:Math.min(1,(ts-t0)/s.t),e=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+    keys.forEach(k=>{if(s[k])st[k]=[from[k][0]+(s[k][0]-from[k][0])*e,from[k][1]+(s[k][1]-from[k][1])*e]});
+    if(st.owner&&!s.ball)st.ball=[st[st.owner][0]-.6,st[st.owner][1]];
+    const gt=gkPos(st.ball);st.GK=[st.GK[0]+(gt[0]-st.GK[0])*.15,st.GK[1]+(gt[1]-st.GK[1])*.15];
+    render(cv,st,sc,ghost);
+    if(p>=1){if("own" in s)st.owner=s.own;i++;t0=null;animTimer=setTimeout(()=>{if(id===playId)anim=requestAnimationFrame(step)},reduced?0:SIDE==="attack"?80:250);return}
+    anim=requestAnimationFrame(step);
+  }
+  anim=requestAnimationFrame(step);
+}
+function updHead(){document.getElementById("score").textContent=SIDE==="attack"?`Plays ${attackPlays} · Chances ${attackChances}`:`Score ${score} / ${answered}`;document.getElementById("prog").style.width=(idx/SS.length*100)+"%"}
+function show(){
+  stopPlay();
+  updHead();
+  if(idx>=SS.length)return summary();
+  if(SIDE==="attack")return showAttack();
+  const sc=SS[idx],L="ABCD";
+  // shuffle-free but present attack only
+  const base=initState(sc,{d:sc.opts[0].d.map(()=>[-9,-9])});render(cv,base,sc);
+  panel.innerHTML=`<div class="tag">${SET==="gen"?"Endless · ":""}${MODE}v${MODE} · Scenario ${idx+1} of ${SS.length}${sc.step2?" · Step 2":""}</div><h2>${sc.title}</h2><p class="q">${sc.q}</p><div class="opts"></div><div class="msg" id="msg"></div><div class="btns" id="btns"></div>
+  <div class="roles"><b>P Pressure</b> – close the ball, show away from goal. <b>C Cover</b> – back up P, goal-side of the next attacker. <b>B Balance</b> – deepest, cover the cover, watch the far attacker. Roles follow the ball, not shirt numbers.</div>`;
+  const box=panel.querySelector(".opts");
+  sc.opts.forEach((o,i)=>{
+    const b=document.createElement("button");b.className="opt";const m=document.createElement("canvas");m.width=264;m.height=252;
+    b.appendChild(m);b.insertAdjacentHTML("beforeend",`<b>Option ${L[i]}</b>`);box.appendChild(b);
+    render(m,initState(sc,o),sc);
+    b.onclick=()=>answer(i,box);
+    b.insertAdjacentHTML("beforeend",'<small class="cons"></small>');
+  });
+}
+function answer(i,box){
+  const sc=SS[idx],o=sc.opts[i],best=sc.opts.find(x=>x.preferred)||sc.opts.find(x=>x.ok);
+  [...box.children].forEach((b,j)=>{b.disabled=true;if(sc.opts[j]===best)b.classList.add("right");else if(sc.opts[j].ok)b.classList.add("alt");else if(j===i)b.classList.add("wrong")});
+  [...box.children].forEach((b,j)=>{const op=sc.opts[j],st=initState(sc,op);st.trace=traceOf(sc,op);st.ok=op.consequence||op.ok;render(b.querySelector("canvas"),st,sc);
+    const last=[...op.anim].reverse().find(x=>x.msg);b.querySelector(".cons").textContent=(op===best?"Best – ":op.ok?"Also full credit (trade-off) – ":"→ ")+(last?last.msg:"")});
+  answered++;if(o.ok)score++;else missed[o.tag]=(missed[o.tag]||0)+1;updHead();
+  const m=document.getElementById("msg");m.style.display="block";m.className="msg "+(o.ok?"ok":"bad");
+  m.innerHTML=`<b>${o.ok?(o.consequence?(o.preferred?"Preferred here.":"Defensible alternative – full credit."):"Correct!"):"Not quite – "+o.tag.toUpperCase()+" problem."}</b> ${o.why}${o===best?"":"<br><br><b>"+(best.preferred?"Preferred here:":"Best:")+"</b> "+best.why}`;
+  const bt=document.getElementById("btns");
+  bt.innerHTML=`<button class="b s" id="rp">↺ Replay</button>${o===best?"":'<button class="b s" id="wb">'+(best.preferred?"Watch preferred shape":"Watch best answer")+'</button>'}<button class="b" id="nx">${idx+1<SS.length?"Next →":"See results"}</button>`;
+  const ghost=o.ok?null:best.d;
+  play(sc,o,ghost);
+  bt.querySelector("#rp").onclick=()=>play(sc,o,ghost);
+  if(o!==best)bt.querySelector("#wb").onclick=()=>play(sc,best);
+  bt.querySelector("#nx").onclick=()=>{idx++;show()};
+  // After answering, any option card can be clicked to watch its play (no re-scoring).
+  [...box.children].forEach((b,j)=>{b.disabled=false;b.title="Watch this option play out";b.onclick=()=>{const op=sc.opts[j];
+    [...box.children].forEach(x=>x.classList.remove("watching"));b.classList.add("watching");
+    play(sc,op,op.ok?null:best.d);m.innerHTML=`<b>Option ${"ABCD"[j]} – ${op===best?"Best":op.ok?"Also full credit":op.tag.toUpperCase()+" problem"}.</b> ${op.why}`};
+    if(!b.querySelector(".watch"))b.insertAdjacentHTML("beforeend",'<small class="watch">▶ Watch this shape</small>')});
+  const hint=document.createElement("p");hint.className="hint";hint.textContent="▶ Click any option above to watch how it plays out – your score stays the same.";bt.after(hint);
+}
+let FOLLOW=null,moveChance=false;
+function showAttack(){
+  const sc=FOLLOW||SS[idx];render(cv,initState(sc,{d:sc.d,roles:sc.roles}),sc);
+  panel.innerHTML=`<div class="tag">Attack · Curated · ${MODE}v${MODE} · Scenario ${idx+1} of ${SS.length}${sc.step2?" · Step 2":""}</div><h2>${sc.title}</h2><p class="q">${sc.q}</p><div class="opts"></div><div class="msg" id="msg" aria-live="polite"></div><div class="btns" id="btns"></div>`;
+  const box=panel.querySelector(".opts");
+  sc.opts.forEach((o,i)=>{
+    const b=document.createElement("button");b.className="opt";const c=document.createElement("canvas");c.width=264;c.height=252;b.appendChild(c);
+    b.insertAdjacentHTML("beforeend",`<b>${o.name}</b>`);box.appendChild(b);const st=initState(sc,{d:sc.d,roles:sc.roles});st.plan=o.path;render(c,st,sc);
+    b.onclick=()=>answerAttack(i,box);
+  });
+}
+function answerAttack(i,box){
+  const sc=FOLLOW||SS[idx],o=sc.opts[i],result=sampleAttack(sc,o);if(!sc.step2){attackPlays++;moveChance=false}
+  if(result.outcome==="Chance created"&&!moveChance){attackChances++;moveChance=true}updHead();
+  const next=!sc.step2&&(result.outcome==="Chance created"||result.outcome==="Possession kept")?followUp(sc,o,result):null;
+  [...box.children].forEach((b,j)=>{b.disabled=true;if(i===j)b.classList.add("selected")});
+  const m=document.getElementById("msg");m.style.display="block";m.innerHTML="<b>Play unfolding…</b>";
+  const bt=document.getElementById("btns");
+  bt.innerHTML=`<button class="b s" id="rp" disabled>↺ Replay</button><button class="b" id="nx">${next?"Next decision →":idx+1<SS.length?"Next scenario →":"See results"}</button>`;
+  function finished(){m.innerHTML=`<b>${result.outcome} · ${o.read}</b><br>${o.why}<br><br>${result.note}${sc.step2?`<br><br><i>${sc.reveal}</i>`:next?"<br><br>Red still has the ball – keep the move going.":""}`;bt.querySelector("#rp").disabled=false;enableWatch()}
+  play(sc,result,null,finished);
+  bt.querySelector("#rp").onclick=()=>play(sc,result,null,finished);
+  let hinted=false;
+  function enableWatch(){
+    [...box.children].forEach((b,j)=>{b.disabled=false;b.title="Watch this play";
+      if(!b.querySelector(".watch"))b.insertAdjacentHTML("beforeend",'<small class="watch">▶ Watch this play</small>');
+      b.onclick=()=>{const op=sc.opts[j],r=sampleAttack(sc,op);[...box.children].forEach(x=>x.classList.remove("watching"));b.classList.add("watching");
+        m.innerHTML="<b>Play unfolding…</b>";play(sc,r,null,()=>{m.innerHTML=`<b>${j===i?"Your play":"Watching"}: ${op.name} – ${r.outcome} · ${op.read}</b><br>${op.why}<br><br>${r.note}<br><br><i>Watching doesn't change your score or the next decision.</i>`})}});
+    if(!hinted){hinted=true;const h=document.createElement("p");h.className="hint";h.textContent="▶ Click any play above to watch how it could turn out – your score stays the same.";bt.after(h)}
+  }
+  bt.querySelector("#nx").onclick=()=>{if(next){FOLLOW=next}else{FOLLOW=null;idx++}show()};
+}
+function summary(){
+  stopPlay();drawField(cv);
+  if(SIDE==="attack"){
+    panel.innerHTML=`<div class="tag">Attack · Finished</div><h2>${attackChances} chances from ${attackPlays} plays</h2><p class="q">Open angles, support triangles, and patient resets. A good read can still be stopped; a difficult play can sometimes come off.</p><div class="btns"><button class="b" id="again">Play again</button></div>`;
+    document.getElementById("again").onclick=()=>start(MODE);return;
+  }
+  const worst=Object.entries(missed).sort((a,b)=>b[1]-a[1])[0];
+  const tips={pressure:"Get the presser tight to the ball quickly and angle the press away from goal, without diving in.",cover:"Cover should prioritize the next human receiver, staying goal-side while backing up pressure. Scan for a precise wall rebound, but do not abandon the player to camp on it.",balance:"Keep a deepest defender protecting space behind cover while watching the far attacker; roles follow the ball, not shirt numbers."};
+  panel.innerHTML=`<div class="tag">Finished</div><h2>You scored ${score} / ${SS.length}</h2>
+  <p class="q">${worst&&worst[1]>0?`Most missed principle: <b>${worst[0].toUpperCase()}</b> (${worst[1]}x). ${tips[worst[0]]}`:"Perfect shape – pressure, cover and balance all on point!"}</p>
+  <div class="btns"><button class="b" id="again">Play again</button></div>`;
+  document.getElementById("again").onclick=()=>start(MODE);
+}
+function start(m){stopPlay();FOLLOW=null;MODE=m;idx=0;score=0;answered=0;attackPlays=0;attackChances=0;missed={pressure:0,cover:0,balance:0};
+  SS=SIDE==="attack"?ATTACK.filter(x=>(x.mode||3)===m):SET==="gen"?buildBatch(m,(Date.now()^(Math.random()*1e9))|0):S.filter(x=>(x.mode||3)===m).map(x=>({...x,opts:shuffle([...x.opts])}));
+  // make sure the correct slot varies: avoid same slot as previous scenario
+  if(SIDE==="defend")for(let i=1;i<SS.length;i++){let t=0;while(SS[i].opts.findIndex(o=>o.ok)===SS[i-1].opts.findIndex(o=>o.ok)&&t++<20)shuffle(SS[i].opts)}
+  document.querySelector("h1").innerHTML=SIDE==="attack"?(m===4?"ATTACKING <span>PLAYS</span> · 4v4 Box":"ATTACKING <span>PLAYS</span> · 3v3 Triangles"):"DEFENDING <span>QUIZ</span> · Pressure · Cover · Balance";
+  document.querySelectorAll("[data-side]").forEach(b=>{b.classList.toggle("on",b.dataset.side===SIDE);b.setAttribute("aria-pressed",b.dataset.side===SIDE)});
+  document.querySelector(".mode.set").hidden=SIDE==="attack";
+  document.querySelectorAll(".mode button[data-m]").forEach(b=>b.classList.toggle("on",+b.dataset.m===m));document.querySelectorAll(".mode button[data-s]").forEach(b=>b.classList.toggle("on",b.dataset.s===SET));show()}
+document.querySelectorAll(".mode button[data-m]").forEach(b=>b.onclick=()=>start(+b.dataset.m));
+document.querySelectorAll(".mode button[data-s]").forEach(b=>b.onclick=()=>{SET=b.dataset.s;start(MODE)});
+document.querySelectorAll("[data-side]").forEach(b=>b.onclick=()=>{SIDE=b.dataset.side;start(MODE)});
+start(3);
+</script>
+</body>
+</html>
